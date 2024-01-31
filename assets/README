@@ -1,0 +1,5 @@
+## complement regions to mm9-blacklist
+## blacklist regions will be removed on the first step,
+## so we do not neet care about them later
+sort -k1,1 mm9.chrom.sizes > mm9.chrom.sizes.sorted
+bedtools complement -i mm9-blacklist.bed -g mm9.chrom.sizes.sorted > mm9-blacklist_complement
