@@ -16,7 +16,13 @@ SAMPLE_LABELS="!{SAMPLE_LABELS}"
 
 mm9_chrom_sizes="!{mm9_chrom_sizes}"
 
-mkdir -p XLSfiles && mv *.xls ./XLSfiles
+mkdir -p XLSfiles
+if [ "${PEAKCALLER}" == "MACS2" ]; then
+    mv *.xls ./XLSfiles
+else
+    ## for sicer/epic2
+    mv *.bed ./XLSfiles
+fi
 
 module load R
 module load bedtools

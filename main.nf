@@ -14,11 +14,13 @@ params.dataset_label="TEST1"
 // params.xlsx_config = file("./hnf6_samples.xlsx", checkIfExists: true)
 params.xlsx_config = file(params.input_config, checkIfExists: true)
 
+include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
+
 process bowtie2_align {
 
     tag "${sample_id}"
     
-    echo true
+    //echo true
     // executor "local"
     cpus 16
     memory '32 GB'
@@ -51,7 +53,7 @@ process bowtie2_align {
     // TODO: remove prefixes in script and use usual sam and bam, rename later in publishdir
     
     """
-    echo "${sample_id} library: ${library}"
+    #echo "${sample_id} library: ${library}"
     module load bowtie2
     module load samtools
     bowtie2 -p $task.cpus -x $params.bowtie2_index $reads_args -S ${sample_id}_bowtie2.sam
@@ -77,14 +79,14 @@ process bowtie2_align {
 process bam_count {
     tag "${sample_id}"
     
-    echo true
+    // echo true
     cpus 4
     memory '32 GB'
     // executor 'local'
 
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "*.gz*", overwrite: true
+    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "*fragments*.bed*", overwrite: true
     publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: true
     
     input:
@@ -101,7 +103,7 @@ process bam_count {
     bedtools_bedpe=library == "paired-end" ? "-bedpe" : ""
     """
     module load bedtools
-    echo "LIBRARY: ${library}"
+    #echo "LIBRARY: ${library}"
     
     sambamba view -h -t $task.cpus -f bam -F "[XS] == null and not unmapped ${filter_bedpe}" $bam > 1.bam
     sambamba sort -n -t $task.cpus 1.bam
@@ -172,20 +174,20 @@ process macs2_callpeak {
     """
 }
 
-process macs2_union {
+process peak_union {
 
     executor "local"
     echo true
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/macs2_union/", mode: "copy", pattern: "macs2_union.bed", overwrite: true
+    publishDir path: "${params.output_dir}/peak_union/", mode: "copy", pattern: "peak_union.bed", overwrite: true
 
     input:
     path("*")
     
     output:
-    path("macs2_union.bed"), emit: union
+    path("peak_union.bed"), emit: union
 
     script:
     """
@@ -193,12 +195,12 @@ process macs2_union {
     set -x
     cat * > tmp.bed
     sort -k1,1 -k2,2n tmp.bed > tmp1.bed
-    bedtools merge -i tmp1.bed > macs2_union.bed
+    bedtools merge -i tmp1.bed > peak_union.bed
     """
     
     stub:
     """
-    cat * > macs2_union.bed
+    cat * > peak_union.bed
     """
 }
 
@@ -233,19 +235,21 @@ process calc_sample_stats {
     executor 'local'
     echo true
     input:
-    tuple val(sample_id), path(xls), path(fragments_union_coverage), path(union)
+    tuple val(sample_id), path(fragments), path(fragments_union_coverage), path(union)
     
     output:
     path("${sample_id}_output.txt")
     script:
 
+    // ## FRAGMENT_COUNT=\$(grep 'in treatment:' $xls | awk '{print \$NF}') ## macs2
+    // ## FRAGMENT_COUNT=\$(grep -A 1 'Line count of fragments BED file:' *\${Sample_ID}'.o'* | awk 'FNR==2{print \$0}') ## sicer
+    // ## echo "${sample_id} - fr count: \${FRAGMENT_COUNT} - \${FRAGMENT_IN_PEAK_COUNT}"    
+    // ## echo "${sample_id},\${FRAGMENT_COUNT},\${FRAGMENT_IN_PEAK_COUNT},\${FRAGMENT_IN_PEAK_RATIO}" 
+
     """
-    FRAGMENT_COUNT=\$(grep 'in treatment:' $xls | awk '{print \$NF}') ## macs2
-    ## FRAGMENT_COUNT=\$(grep -A 1 'Line count of fragments BED file:' *\${Sample_ID}'.o'* | awk 'FNR==2{print \$0}') ## sicer
+    FRAGMENT_COUNT=\$(cat $fragments | wc -l )
     FRAGMENT_IN_PEAK_COUNT=\$(awk '{n+=\$4;} ; END {print n;}' ${fragments_union_coverage})
-    ## echo "${sample_id} - fr count: \${FRAGMENT_COUNT} - \${FRAGMENT_IN_PEAK_COUNT}"
     FRAGMENT_IN_PEAK_RATIO=\$(echo "scale=4;\${FRAGMENT_IN_PEAK_COUNT}/\${FRAGMENT_COUNT}" | bc)
-    ## echo "${sample_id},\${FRAGMENT_COUNT},\${FRAGMENT_IN_PEAK_COUNT},\${FRAGMENT_IN_PEAK_RATIO}" 
     echo "${sample_id},\${FRAGMENT_COUNT},\${FRAGMENT_IN_PEAK_COUNT},\${FRAGMENT_IN_PEAK_RATIO}" > ${sample_id}_output.txt
     """
     
@@ -262,7 +266,7 @@ process calc_norm_factors {
 
     executor "local"
     beforeScript 'source $HOME/.bashrc'
-    publishDir path: "${params.output_dir}/macs2_union/", mode: "copy", pattern: "*.tsv", overwrite: true
+    publishDir path: "${params.output_dir}/peak_union/", mode: "copy", pattern: "*.tsv", overwrite: true
         
     input:
     path(sample_stats)
@@ -274,97 +278,6 @@ process calc_norm_factors {
     """
     module load R
     calculate_norm_factors.R ${sample_stats} "Norm_Factors.tsv"
-    """
-}
-
-process diffreps {
-    tag "${NUM}"
-    executor 'sge'
-    cpus 16
-    //cache false
-    time '2h'
-    // echo true
-
-    beforeScript 'source $HOME/.bashrc'
-    
-    input:
-    tuple val(NUM), val(TREATMENT_NAME), val(CONTROL_NAME), val(TREATMENT_SAMPLES), val(CONTROL_SAMPLES),
-        val(NORMALIZATION), val(WINDOW_SIZE), path(TREATMENT_FILES), path(CONTROL_FILES), path(NORM_FILE)
-    output:
-    tuple val(NUM), val(report_name), path("diffReps_*")
-
-    shell:
-    report_name="diffReps_${TREATMENT_NAME}.vs.${CONTROL_NAME}_${NORMALIZATION}_${WINDOW_SIZE}"
-    
-    template 'diffreps.sh'
-}
-
-process diffreps_summary {
-    tag "${NUM}"
-
-    executor 'local'
-    // cpus 16
-    // echo true
-    
-    publishDir path: "${params.output_dir}/diffreps_output/", mode: "copy", pattern: "${output_dir}/*", overwrite: true
-    
-    input:
-    tuple val(NUM), val(TREATMENT_NAME), val(CONTROL_NAME), val(TREATMENT_SAMPLES), val(CONTROL_SAMPLES),
-        val(NORMALIZATION), val(WINDOW_SIZE), val(report_name), path(diffout), path(xls), path(SAMPLE_LABELS)
-    path(mm9_chrom_sizes)
-
-    
-    output:
-    tuple val(NUM), path("${output_dir}/*")
-    tuple val(report_name), path("Hist*.pdf"), emit: hist_pdf
-    tuple val(report_name), path("FDR*.pdf"), emit: fdr_pdf
-    tuple val(report_name), path("Bar*.pdf"), emit: bar_pdf
-    tuple val(NUM), val(output_dir), path("*.bb"), emit: diffreps_track
-    path("${report_name}"), emit: diffreps_output    
-
-    shell:
-    peakcaller="${params.peakcaller}"
-    output_dir="${NUM}_${report_name}_${peakcaller}"
-    
-    dataset_label="${params.dataset_label}"
-    template 'diffreps_summary.sh'
-}
-
-process aggregate_diffreps_pdf {
-    tag("${group_name}")
-    executor 'local'
-    publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${group_name}", mode: "copy", pattern: "${group_name}_*.pdf", overwrite: true
-    
-    input:
-    tuple val(group_name), path(hist), path(fdr), path(bar)
-    output:
-    path("${group_name}_*.pdf")
-    script:
-    
-    """
-    module load poppler
-    pdfunite $hist "${group_name}_Histogram_Barcharts_${params.peakcaller}.pdf"
-    pdfunite $fdr "${group_name}_FDR_Barcharts_${params.peakcaller}.pdf"
-    pdfunite $bar "${group_name}_Barcharts_${params.peakcaller}.pdf"
-    """
-}
-
-process collect_diffreps_norm_factors {
-
-    executor 'local'
-    publishDir path: "${params.output_dir}/diffreps_output/", mode: "copy", pattern: "*.xlsx", overwrite: true
-    echo true
-
-    input:
-    tuple path(diffreps_output), path(sample_stats)
-    output:
-    path("*.xlsx")
-
-    script:
-    """
-    module load R
-    diffreps_output_parser.R --path "." \
-        --rippm_report ${sample_stats}
     """
 }
 
@@ -437,6 +350,51 @@ process parse_configuration_xls {
     """
 }
 
+process epic2_callpeak {
+    tag "${sample_id}"
+    
+    // echo true
+    // executor "local"
+    
+    cpus 1
+    memory '8 GB'
+    
+    beforeScript 'source $HOME/.bashrc'
+    
+    publishDir path: "${params.output_dir}/${sample_id}/epic2/", mode: "copy", pattern: "*bed", overwrite: true
+        
+    executor 'sge'
+    beforeScript 'source $HOME/.bashrc'
+
+    input:
+    tuple val(sample_id), path(fragments)
+    path(mm9_chrom_sizes)
+    
+    output:
+    tuple val(sample_id), path("${sample_id}_epic_bed6.bed"), emit: bed6
+    tuple val(sample_id), path("${sample_id}_epic_bed3.bed"), emit: bed3
+    tuple val(sample_id), path("*epic2*.bb"), emit: epic2_bb
+
+    script:
+    //species=mm9
+    window_size=400
+    fragment_size=200
+    effective_genome_fraction=0.80
+    gap_size=2400 // 6
+    e_value=100
+    
+    """
+    module load epic2
+    module load bedtools
+    epic2 --output "${sample_id}_epic_bed6.bed" -egf ${effective_genome_fraction} -cs ${mm9_chrom_sizes} -t ${fragments} -e ${e_value} -fs ${fragment_size} -bin ${window_size} -g 6
+    awk 'OFS="\t" {print \$1,\$2,\$3}' "${sample_id}_epic_bed6.bed" > "${sample_id}_epic_bed3.bed"
+    
+    cat "${sample_id}_epic_bed3.bed" | grep -vE "track|chrM|random" > tmp.bed
+    bedtools sort -i tmp.bed > tmp.sorted.bed
+    bedToBigBed -allow1bpOverlap tmp.sorted.bed ${mm9_chrom_sizes} "${sample_id}_epic2.bb"
+    """
+}
+
 process read12_tester {
     executor 'local'
     echo true
@@ -502,91 +460,55 @@ workflow {
     bam_count(bowtie2_align.output.bam)
     
     macs2_callpeak(bam_count.output.final_bam, mm9_chrom_sizes)
-
-    all_macs2 = macs2_callpeak.out.narrow_bed
-        .map{it->it[1]}.collect()
+    epic2_callpeak(bam_count.output.fragments, mm9_chrom_sizes)
     
-    macs2_union(all_macs2)
+    
+    //peak union (MACS2 / EPIC2(SICER))
+    if (params.peakcaller == "MACS2") {
+        peakcaller_bed_files = macs2_callpeak.out.narrow_bed
+            .map{it->it[1]}.collect()
+    } else {
+        peakcaller_bed_files = epic2_callpeak.out.bed3
+            .map{it->it[1]}.collect()
+    }
 
-    fragments_union_overlap(bam_count.output.fragments, macs2_union.output.union)
-    // fragments_union_overlap.out.fr_union_overlap 
+    peak_union(peakcaller_bed_files)
 
-    peaks_for_stats = macs2_callpeak.out.xls
+
+    //overlap peakcaller union and fragments files
+    fragments_union_overlap(bam_count.out.fragments, peak_union.out.union)
+
+    
+    peaks_for_stats_ch = bam_count.out.fragments
         .join(fragments_union_overlap.out.fr_union_overlap)
-        .combine(macs2_union.out.union)
+        .combine(peak_union.out.union)
     
-    calc_sample_stats(peaks_for_stats)
+    calc_sample_stats(peaks_for_stats_ch)
+    
     sample_stats = calc_sample_stats.out
         .collectFile{item -> item.text}
 
     sample_stats | calc_norm_factors
 
+    // log.info("params.peakcaller: $params.peakcaller")
 
-    //diffreps_config = Channel.fromPath( './diffreps_config.csv' ).splitCsv()
-    // diffreps_params = diffreps_config
-    diffreps_params = parse_configuration_xls.out.diffreps_config.splitCsv()
-        .combine(
-            //bed3_to_bed6.out.bed6
-            bam_count.out.fragments_bed6
-                .map{it->it[1]}
-                .collect().toList())
-        .map{num,tn,cn,tsmp,csmp,norm,w,l->
-            def tl = l.findAll{it =~ tsmp.trim()} 
-            def cl = l.findAll{it =~ csmp.trim()}
-            return [num.trim(),tn.trim(),cn.trim(),tsmp.trim(),csmp.trim(),norm.trim(),w.trim(),tl,cl]}
-        
-    // diffreps(diffreps_params) | view
+    if (params.peakcaller == "MACS2") {
+        extra_columns = macs2_callpeak.out.xls
+    } else {
+        extra_columns = epic2_callpeak.out.bed6
+    }
 
-    diffreps_norm_params = diffreps_params
-        .map{it->[it[0], it[3].trim(), it[4].trim()]}
+    calc_norm_factors.out
 
-    // diffreps_norm_params.combine(calc_norm_factors.out) | diffreps_rippm_norm
-    // diffreps_rippm_norm.out
-
-    diffreps_params_withnorm = diffreps_params.combine(calc_norm_factors.out)
-    diffreps_params_withnorm | diffreps
-
-    // diffreps summary
-    //sample_labels = Channel.from("$projectDir/Sample_Labels.txt")
-
-    // diffreps.out | view
+    DIFFREPS(
+        parse_configuration_xls.out.diffreps_config,
+        parse_configuration_xls.out.sample_labels_config,
+        bam_count.out.fragments_bed6,
+        calc_norm_factors.out,
+        extra_columns, //macs2_callpeak.out.xls
+        mm9_chrom_sizes
+    )
     
-    dsummary_ch = diffreps_params.map{it -> it[0..-3]} // exclude bed6 files
-        .join(diffreps.out)
-        .combine(macs2_callpeak.out.xls
-                 .map{it -> it[1]}.collect().toList())
-        .map{it ->
-            //filter xls only participating in comparison
-            def new_xls = it[-1].findAll{it =~ "${it[3]}|${it[4]}"} 
-            def new_out = it[0..-2] << new_xls
-            return new_out}
-    // .combine(sample_labels)
-        .combine(parse_configuration_xls.out.sample_labels_config)
-    
-    diffreps_summary(dsummary_ch, mm9_chrom_sizes)
-    
-    // diffreps_summary.out.diffreps_output | view
-
-    //aggregate diffpres pdfs
-    hist_pdfs = diffreps_summary.out.hist_pdf
-        .groupTuple()
-    fdr_pdfs = diffreps_summary.out.fdr_pdf
-        .groupTuple()
-    bar_pdfs = diffreps_summary.out.bar_pdf
-        .groupTuple()
-    
-    all_pdfs = hist_pdfs
-        .join(fdr_pdfs)
-        .join(bar_pdfs) | aggregate_diffreps_pdf
-    
-    // -- collect diffreps norm factors
-    diffreps_summary.out.diffreps_output
-        .collect()
-        .toList()
-        .combine(calc_norm_factors.out) | collect_diffreps_norm_factors
-
-    // collect_diffreps_norm_factors.out | view
-
     //creating tracks
     // create_bigwig_files 
     sid_normfact_ch = calc_norm_factors.out.splitCsv(sep: "\t")
@@ -602,22 +524,25 @@ workflow {
     // macs2_callpeak.out.narrow_bb | view
     // diffreps_summary.out.diffreps_track | view
 
-    bw_files = create_bigwig_files.out.map{it -> it[1]} 
-    narrow_files= macs2_callpeak.out.narrow_bb.map{it -> it[1]}
-    broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
-    diffreps_files=diffreps_summary.out.diffreps_track.map{it->it[2]}
+    // bw_files = create_bigwig_files.out.map{it -> it[1]} 
+    // narrow_files= macs2_callpeak.out.narrow_bb.map{it -> it[1]}
+    // broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
+    // broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
+    // diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]} | view
+
     // bam_files=bam_count.out.final_bam.map{it->[it[2],it[3]]} | view
 
     sid_specific_ch = create_bigwig_files.out
         .mix(macs2_callpeak.out.broad_bb)
         .mix(macs2_callpeak.out.narrow_bb)
+        .mix(epic2_callpeak.out.epic2_bb)
         .map{it->[it[0], it[1].getName()]}
         .collectFile{item -> item.join(",")+'\n'}
-    // .combine(sample_labels)
         .combine(parse_configuration_xls.out.sample_labels_config)
 
-    create_sample_specific_tracks(sid_specific_ch)
-    create_sample_specific_tracks.out |view
+    sid_specific_ch | view
+    // create_sample_specific_tracks(sid_specific_ch)
+    // create_sample_specific_tracks.out |view
 
 
 
