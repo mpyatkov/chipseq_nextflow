@@ -1,0 +1,4 @@
+track type=bigBed name=TADS_ABv4 description=Liver_TADs visibility=pack itemRgb=On bigDataUrl=http://waxmanlabvm.bu.edu/aramp10/Lab_Files/TADS_ABv4.bb
+track type=bigBed name=F_14_segments_recolored description=UT_Female_Chromatin_Map visibility=dense itemRgb=on bigDataUrl=http://waxmanlabvm.bu.edu/aramp10/Lab_Files/F_14_segments_recolored.bb
+track type=bigBed name=M_14_segments_recolored description=UT_Male_Chromatin_Map visibility=dense itemRgb=on bigDataUrl=http://waxmanlabvm.bu.edu/aramp10/Lab_Files/M_14_segments_recolored.bb
+track type=bigBed name=mm9-blacklist description=ENCODE_mm9-blacklist visibility=dense itemRgb=on bigDataUrl=http://waxmanlabvm.bu.edu/aramp10/Lab_Files/mm9-blacklist.bb

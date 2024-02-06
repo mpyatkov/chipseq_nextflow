@@ -3,6 +3,7 @@ nextflow.enable.dsl=2
 
 mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: true)
 mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", checkIfExists: true)
+default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
 
 
 params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
@@ -313,6 +314,7 @@ process create_bigwig_files {
 
 process create_sample_specific_tracks {
     executor 'local'
+    //echo true
     //publishDir copy to server
     input:
     tuple path(sid_tracks), path(sample_labels)
@@ -332,6 +334,29 @@ process create_sample_specific_tracks {
         --output_name "sid_tracks.txt"
     """
 }
+
+process create_diffreps_tracks {
+    executor 'local'
+    //publishDir copy to server
+    input:
+    tuple path(diffreps_tracks), path(diffreps_config)
+
+    output:
+    path("diffreps_tracks.txt")
+
+    script:
+    data_path="${workflow.userName}/${params.dataset_label}"
+    
+    """
+    module load R
+    generate_diffreps_tracks.R \
+        --diffreps_config ${diffreps_config} \
+        --diffreps_tracks ${diffreps_tracks} \
+        --data_path ${data_path} \
+        --output_name "diffreps_tracks.txt"
+    """
+}
+
 
 process parse_configuration_xls {
     executor 'local'
@@ -532,15 +557,34 @@ workflow {
 
     // bam_files=bam_count.out.final_bam.map{it->[it[2],it[3]]} | view
 
+
+
     sid_specific_ch = create_bigwig_files.out
         .mix(macs2_callpeak.out.broad_bb)
         .mix(macs2_callpeak.out.narrow_bb)
         .mix(epic2_callpeak.out.epic2_bb)
+        .mix(bam_count.out.final_bam.map{it->[it[0],it[2]]})
         .map{it->[it[0], it[1].getName()]}
         .collectFile{item -> item.join(",")+'\n'}
         .combine(parse_configuration_xls.out.sample_labels_config)
 
-    sid_specific_ch | view
+
+    group_specific_ch = DIFFREPS.out.diffreps_track 
+        .map{it->[it[0], it[2].getName()]}
+        .collectFile{item -> item.join(",")+'\n'}
+        .combine(parse_configuration_xls.out.diffreps_config)
+
+
+    create_sample_specific_tracks(sid_specific_ch)
+    create_sample_specific_tracks.out |view
+
+    create_diffreps_tracks(group_specific_ch)
+    // create_diffreps_tracks.out | view
+
+    Channel.from(default_tracks).concat(create_diffreps_tracks.out,create_sample_specific_tracks.out)
+        // .mix(create_sample_specific_tracks.out)
+        .collectFile(sort: 'index'){item -> item.text} | view
+    
     // create_sample_specific_tracks(sid_specific_ch)
     // create_sample_specific_tracks.out |view
 
