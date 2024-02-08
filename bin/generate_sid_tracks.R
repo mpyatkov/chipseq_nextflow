@@ -60,12 +60,12 @@ get_track_line <- function(t){
 
   track <- if (t$track_type == "bw") {
     extra <- str_glue("autoScale={t$autoscale} viewLimits=0.0:100.0 yLineOnOff=off windowingFunction=mean smoothingWindow=3 maxHeightPixels=100:64:8")
-    str_glue("track type={t$track_ucsc_type} name={t$sample_id}{t$track_suffix} description={t$sample_description} ",
+    str_glue("track type={t$track_ucsc_type} name={t$sample_id}{t$track_suffix} description={t$sample_description}{t$track_suffix} ",
              "db=mm9 visibility={t$visibility} color={t$color} ",
              "{extra} ",
              "bigDataUrl={track_path}")
   } else {
-    str_glue("track type={t$track_ucsc_type} name={t$sample_id}{t$track_suffix} description={t$sample_description} ",
+    str_glue("track type={t$track_ucsc_type} name={t$sample_id}{t$track_suffix} description={t$sample_description}{t$track_suffix} ",
              "db=mm9 visibility={t$visibility} color={t$color} ",
              "bigDataUrl={track_path}")
   }

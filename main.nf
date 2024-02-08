@@ -314,10 +314,9 @@ process create_bigwig_files {
 
 process create_sample_specific_tracks {
     executor 'local'
-    //echo true
-    //publishDir copy to server
+    
     input:
-    tuple path(sid_tracks), path(sample_labels)
+    tuple path(sid_tracks), path(sample_labels)//, path(files)
 
     output:
     path("sid_tracks.txt")
@@ -448,6 +447,28 @@ process read12_tester {
     """
 }
 
+process copy_files_to_server {
+    executor 'local'
+    // publishDir path: "${data_path}", mode: "copy", pattern: "*.{bw,bam*,bb}", overwrite: false
+    // publishDir path: "${data_path}/TRACK_LINES", mode: "copy", pattern: "*.txt", overwrite: true
+    
+    input:
+    path(files)
+    path(track_lines)
+
+    // output:
+    // path("*.{bw,bam,bai,bb,txt}")
+    // stdout
+
+    script:
+    data_path="/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}"
+    """
+    mkdir -p ${data_path}/TRACK_LINES
+    cp ${files} ${data_path}
+    cp ${track_lines} ${data_path}/TRACK_LINES/
+    """
+}
+
 // process test1 {
 //     executor 'local'
 //     echo true
@@ -468,6 +489,8 @@ process read12_tester {
 //     done
 //     """
 // }
+
+
 
 workflow {
 
@@ -534,7 +557,7 @@ workflow {
         mm9_chrom_sizes
     )
     
-    //creating tracks
+    // TRACKS (copying, generating track lines)
     // create_bigwig_files 
     sid_normfact_ch = calc_norm_factors.out.splitCsv(sep: "\t")
         .map{it->[it[0],it[4]]}
@@ -544,21 +567,8 @@ workflow {
     
     create_bigwig_files(sid_fr_norm, mm9_chrom_sizes)
 
-    // create_bigwig_files.out | view
-    // macs2_callpeak.out.broad_bb | view
-    // macs2_callpeak.out.narrow_bb | view
-    // diffreps_summary.out.diffreps_track | view
 
-    // bw_files = create_bigwig_files.out.map{it -> it[1]} 
-    // narrow_files= macs2_callpeak.out.narrow_bb.map{it -> it[1]}
-    // broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
-    // broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
-    // diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]} | view
-
-    // bam_files=bam_count.out.final_bam.map{it->[it[2],it[3]]} | view
-
-
-
+    // create track lines
     sid_specific_ch = create_bigwig_files.out
         .mix(macs2_callpeak.out.broad_bb)
         .mix(macs2_callpeak.out.narrow_bb)
@@ -576,23 +586,25 @@ workflow {
 
 
     create_sample_specific_tracks(sid_specific_ch)
-    create_sample_specific_tracks.out |view
-
-    create_diffreps_tracks(group_specific_ch)
-    // create_diffreps_tracks.out | view
-
-    Channel.from(default_tracks).concat(create_diffreps_tracks.out,create_sample_specific_tracks.out)
-        // .mix(create_sample_specific_tracks.out)
-        .collectFile(sort: 'index'){item -> item.text} | view
-    
-    // create_sample_specific_tracks(sid_specific_ch)
     // create_sample_specific_tracks.out |view
 
+    create_diffreps_tracks(group_specific_ch)
 
+    track_lines = Channel.from(default_tracks).concat(create_diffreps_tracks.out,create_sample_specific_tracks.out)
+        .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text} | view
 
-    // test3 = Channel.fromPath( './test3.csv' ).splitCsv() | read12_tester | view
-    //     // .mix(diffreps_summary.out.diffreps_track)| view
+    // copy bb,bam,bw files to server
+    bw_files = create_bigwig_files.out.map{it -> it[1]} 
+    narrow_files= macs2_callpeak.out.narrow_bb.map{it -> it[1]}
+    broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
+    broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
+    bam_files=bam_count.out.final_bam.map{it->[it[2],it[3]]}
+    diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]}
+    
+    track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect()
+    copy_files_to_server(track_files_to_server, track_lines)
 
+    
     // read12_tester
 
     // log.info """\
@@ -604,11 +616,6 @@ workflow {
          
     //      """
     //      .stripIndent()
-
-    // parse_configuration_xls(params.xlsx_config)
-    // parse_configuration_xls.out.sample_labels_config | view
-    // parse_configuration_xls.out.diffreps_config | view
-    // parse_configuration_xls.out.fastq_config | view
 
 }
 
