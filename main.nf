@@ -469,6 +469,47 @@ process copy_files_to_server {
     """
 }
 
+
+process collect_metrics {
+    tag "${sample_id}"
+    cpus 1
+    memory '16 GB'
+    publishDir path: "${params.output_dir}/${sample_id}/metrics/", mode: "copy", overwrite: true
+
+    beforeScript 'source $HOME/.bashrc'
+    
+    // echo true
+    input:
+    tuple val(sample_id), val(library), path(bam), path(bai)
+    
+    output:
+    tuple val(sample_id), path("*_metrics"), emit: metrics
+    tuple val(sample_id), path("*.pdf"), emit: metrics_pdf
+    
+    script:
+    """
+    module load picard
+    module load R
+
+    # set -x
+    
+    picard \
+        CollectMultipleMetrics \
+        --INPUT $bam \
+        --OUTPUT ${sample_id}.CollectMultipleMetrics
+
+    ## only for paired-end
+    if [[ $library == "single-end" ]];
+    then
+    picard \
+        CollectInsertSizeMetrics \
+        --Histogram_FILE ${sample_id}.InsertSizeMetrics.pdf \
+        --INPUT ${bam} \
+        --OUTPUT ${sample_id}.InsertSizeMetrics
+    fi
+    """
+}
+
 // process test1 {
 //     executor 'local'
 //     echo true
