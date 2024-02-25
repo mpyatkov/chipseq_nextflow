@@ -37,6 +37,7 @@ process bowtie2_align {
     
     output:
     tuple val(sample_id), val(library), path("${sample_id}_sorted.bam"), path("${sample_id}_sorted.bam.bai"),  emit: bam
+    tuple val(sample_id), path("*.log"), emit: log
     
     script:
 
@@ -57,7 +58,7 @@ process bowtie2_align {
     #echo "${sample_id} library: ${library}"
     module load bowtie2
     module load samtools
-    bowtie2 -p $task.cpus -x $params.bowtie2_index $reads_args -S ${sample_id}_bowtie2.sam
+    bowtie2 -p $task.cpus -x $params.bowtie2_index $reads_args -S ${sample_id}_bowtie2.sam 2> ${sample_id}.bowtie2.log
     samtools view -bS ${sample_id}_bowtie2.sam > ${sample_id}_alignments.bam
     samtools sort -@ $task.cpus ${sample_id}_alignments.bam -o "sorted.bam"
     samtools index -@ $task.cpus "sorted.bam"
@@ -98,12 +99,15 @@ process bam_count {
     tuple val(sample_id), path("${sample_id}_fragments.bed"), emit: fragments
     tuple val(sample_id), path("${sample_id}_fragments_bed6.bed"), emit: fragments_bed6
     tuple val(sample_id), val(library), path("${sample_id}_sorted_filtered.bam"), path("${sample_id}_sorted_filtered.bam.bai"), emit: final_bam
+    tuple val(sample_id), path("*stats"), emit: stats
 
     script:
     filter_bedpe=library == "paired-end" ? "and proper_pair" : ""
     bedtools_bedpe=library == "paired-end" ? "-bedpe" : ""
     """
     module load bedtools
+    module load samtools
+    
     #echo "LIBRARY: ${library}"
     
     sambamba view -h -t $task.cpus -f bam -F "[XS] == null and not unmapped ${filter_bedpe}" $bam > 1.bam
@@ -118,6 +122,9 @@ process bam_count {
     sambamba sort -t $task.cpus 2.bam
     mv 2.sorted.bam ${sample_id}_sorted_filtered.bam    
     sambamba index ${sample_id}_sorted_filtered.bam
+
+    samtools stats ${sample_id}_sorted_filtered.bam > ${sample_id}_sorted_filtered.stats
+    samtools flagstats ${sample_id}_sorted_filtered.bam > ${sample_id}_sorted_filtered.flagstats
     """
     
     stub:
@@ -510,6 +517,73 @@ process collect_metrics {
     """
 }
 
+process fastqc {
+    tag "${sample_id}"
+    cpus 4
+    time '3h'
+    memory '16 GB'
+    // publishDir path: "${params.output_dir}/${sample_id}/metrics/", mode: "copy", overwrite: true
+    
+    beforeScript 'source $HOME/.bashrc'
+    
+    // echo true
+    input:
+    tuple val(sample_id), val(r1), val(r2)
+    
+    output:
+    tuple val(sample_id), path("*.html"), emit: html
+    tuple val(sample_id), path("*.zip") , emit: zip
+
+    script:
+    if (r2 == "NO") {
+        """
+        module load fastqc
+        mkdir -p ${sample_id}_out
+        ln -s $r1 ${sample_id}_1.fq.gz
+        fastqc -o ${sample_id}_out --threads $task.cpus ${sample_id}_1.fq.gz
+        mv ${sample_id}_out/* ./
+        """
+    } else {
+        """
+        module load fastqc
+        mkdir -p ${sample_id}_out
+        ln -s $r1 ${sample_id}_1.fq.gz
+        ln -s $r2 ${sample_id}_2.fq.gz
+        fastqc --threads $task.cpus $r1 $r2
+        fastqc -o ${sample_id}_out --threads $task.cpus ${sample_id}_1.fq.gz ${sample_id}_2.fq.gz
+        mv ${sample_id}_out/* ./
+        """
+    }
+}
+
+process multiqc {
+
+    cpus 1
+    publishDir path: "${params.output_dir}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: true
+
+    beforeScript 'source $HOME/.bashrc'
+    
+    input:
+    path(fastqc)          // fastq
+    path(aligner)         // bowtie logs
+    path(bam_count_stats) // samtools stats
+    path(macs2_xls)       // MACS2 xls files
+    path(picard)          // picard files
+    // echo true
+    
+    output:
+    path "*multiqc_report.html", emit: report
+    path "*_data"              , emit: data
+    path "*_plots"             , optional:true, emit: plots
+    
+
+    script:
+    """
+    module load multiqc
+    multiqc -f .
+    """
+}
+
 // process test1 {
 //     executor 'local'
 //     echo true
@@ -543,8 +617,9 @@ workflow {
 
     
     // fastq = Channel.fromPath( './hnf6.csv' ).splitCsv()
-    bowtie2_align(parse_configuration_xls.out.fastq_config.splitCsv(),
-                  mm9_black_complement)
+    fastq_reads_ch = parse_configuration_xls.out.fastq_config.splitCsv()
+    
+    bowtie2_align(fastq_reads_ch, mm9_black_complement)
     
     bam_count(bowtie2_align.output.bam)
     
@@ -586,8 +661,6 @@ workflow {
     } else {
         extra_columns = epic2_callpeak.out.bed6
     }
-
-    calc_norm_factors.out
 
     DIFFREPS(
         parse_configuration_xls.out.diffreps_config,
@@ -632,7 +705,7 @@ workflow {
     create_diffreps_tracks(group_specific_ch)
 
     track_lines = Channel.from(default_tracks).concat(create_diffreps_tracks.out,create_sample_specific_tracks.out)
-        .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text} | view
+        .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text}
 
     // copy bb,bam,bw files to server
     bw_files = create_bigwig_files.out.map{it -> it[1]} 
@@ -645,7 +718,22 @@ workflow {
     track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect()
     copy_files_to_server(track_files_to_server, track_lines)
 
+    //picard
+    collect_metrics(bam_count.out.final_bam)
     
+    fastqc(fastq_reads_ch)
+
+    // bowtie2_align.out.log | view
+    // bam_count.out.stats | view
+    multiqc(
+        fastqc.out.zip.map{it -> it[1]}.collect(),
+        bowtie2_align.out.log.map{it -> it[1]}.collect(),
+        bam_count.out.stats.map{it -> it[1]}.collect(),
+        macs2_callpeak.out.xls.map{it -> it[1]}.collect(),
+        collect_metrics.out.metrics.map{it -> it[1]}.collect()
+    )
+
+    multiqc.out.report | view
     // read12_tester
 
     // log.info """\
