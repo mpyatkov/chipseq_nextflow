@@ -1,8 +1,23 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+def create_diffreps_channel(row) {
+    def meta = [:]
+    // 1, Hnf6_Male, Hnf6_Female, G73M03|G73M04|G76M12|G76M13, G73M01|G73M02|G76M10|G76M11, RIPPM, 1000
+    meta.num               = row[0].trim()
+    meta.treatment_name    = row[1].trim()
+    meta.control_name      = row[2].trim()
+    meta.treatment_samples = row[3].trim()
+    meta.control_samples   = row[4].trim()
+    meta.normalization     = row[5].trim()
+    meta.window_size       = row[6].trim()
+    meta.report_name = "diffReps_${meta.treatment_name}.vs.${meta.control_name}_${meta.normalization}_${meta.window_size}"
+    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
+    return meta
+}
+
 process diffreps {
-    tag "${NUM}"
+    tag "${meta.num}"
     executor 'sge'
     cpus 16
     //cache false
@@ -12,19 +27,17 @@ process diffreps {
     beforeScript 'source $HOME/.bashrc'
     
     input:
-    tuple val(NUM), val(TREATMENT_NAME), val(CONTROL_NAME), val(TREATMENT_SAMPLES), val(CONTROL_SAMPLES),
-        val(NORMALIZATION), val(WINDOW_SIZE), path(TREATMENT_FILES), path(CONTROL_FILES), path(NORM_FILE)
+    tuple val(meta), path(TREATMENT_FILES), path(CONTROL_FILES), path(NORM_FILE)
+    
     output:
-    tuple val(NUM), val(report_name), path("diffReps_*")
+    tuple val(meta) , path("diffReps_*")
 
     shell:
-    report_name="diffReps_${TREATMENT_NAME}.vs.${CONTROL_NAME}_${NORMALIZATION}_${WINDOW_SIZE}"
-    
     template 'diffreps.sh'
 }
 
 process diffreps_summary {
-    tag "${NUM}"
+    tag "${meta.num}"
 
     executor 'local'
     // cpus 16
@@ -33,24 +46,22 @@ process diffreps_summary {
     publishDir path: "${params.output_dir}/diffreps_output/", mode: "copy", pattern: "${output_dir}/*", overwrite: true
     
     input:
-    tuple val(NUM), val(TREATMENT_NAME), val(CONTROL_NAME), val(TREATMENT_SAMPLES), val(CONTROL_SAMPLES),
-        val(NORMALIZATION), val(WINDOW_SIZE), val(report_name), path(diffout), path(xls), path(SAMPLE_LABELS)
+    tuple val(meta), path(diffout), path(xls), path(SAMPLE_LABELS)
     path(mm9_chrom_sizes)
-
     
     output:
-    tuple val(NUM), path("${output_dir}/*")
-    tuple val(report_name), path("Hist*.pdf"), emit: hist_pdf
-    tuple val(report_name), path("FDR*.pdf"), emit: fdr_pdf
-    tuple val(report_name), path("Bar*.pdf"), emit: bar_pdf
-    tuple val(NUM), val(output_dir), path("*.bb"), emit: diffreps_track
-    path("${report_name}"), emit: diffreps_output    
+    tuple val(meta.num), path("${output_dir}/*")
+    tuple val(meta.group_name), path("Hist*.pdf"), emit: hist_pdf
+    tuple val(meta.group_name), path("FDR*.pdf"), emit: fdr_pdf
+    tuple val(meta.group_name), path("Bar*.pdf"), emit: bar_pdf
+    tuple val(meta.num), val(output_dir), path("*.bb"), emit: diffreps_track
+    path("${meta.report_name}"), emit: diffreps_output    
 
     shell:
     peakcaller="${params.peakcaller}"
-    output_dir="${NUM}_${report_name}_${peakcaller}"
-    
+    output_dir="${meta.num}_${meta.report_name}_${peakcaller}"
     dataset_label="${params.dataset_label}"
+    
     template 'diffreps_summary.sh'
 }
 
@@ -102,19 +113,20 @@ workflow DIFFREPS {
     mm9_chrom_sizes      //mm9_chrom_sizes
 
     main:
-    diffreps_params = diffreps_config.splitCsv()
+
+    diffreps_params = diffreps_config
+        .splitCsv() 
+        .map{it->create_diffreps_channel(it)} 
         .combine(
             fragments_bed6
                 .map{it->it[1]}
                 .collect().toList())
-        .map{num,tn,cn,tsmp,csmp,norm,w,l->
-            def tl = l.findAll{it =~ tsmp.trim()} 
-            def cl = l.findAll{it =~ csmp.trim()}
-            return [num.trim(),tn.trim(),cn.trim(),tsmp.trim(),csmp.trim(),norm.trim(),w.trim(),tl,cl]}
-        
-    diffreps_norm_params = diffreps_params
-        .map{it->[it[0], it[3].trim(), it[4].trim()]}
-
+        .map{meta,l ->
+            def tl = l.findAll{it =~ meta.treatment_samples}
+            def cl = l.findAll{it =~ meta.control_samples}
+            return [meta, tl, cl]
+        }
+    
     diffreps_params_withnorm = diffreps_params.combine(norm_factors)
     diffreps_params_withnorm | diffreps
 
@@ -122,11 +134,10 @@ workflow DIFFREPS {
         .join(diffreps.out)
         .combine(peakcaller_xls
                  .map{it -> it[1]}.collect().toList())
-        .map{it ->
+        .map{meta,diffout,xls ->
             //filter xls only participating in comparison
-            def new_xls = it[-1].findAll{it =~ "${it[3]}|${it[4]}"} 
-            def new_out = it[0..-2] << new_xls
-            return new_out}
+            def new_xls = xls.findAll{it =~ "${meta.treatment_samples}|${meta.control_samples}"} 
+            return [meta, diffout, xls]}
         .combine(sample_labels_config)
     
     diffreps_summary(dsummary_ch, mm9_chrom_sizes)

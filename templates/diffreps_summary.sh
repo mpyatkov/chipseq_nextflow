@@ -1,13 +1,13 @@
 #!/bin/bash
 
-NUM="!{NUM}"
-TREATMENT_NAME="!{TREATMENT_NAME}"
-CONTROL_NAME="!{CONTROL_NAME}"
-TREATMENT_SAMPLES="!{TREATMENT_SAMPLES}"
-CONTROL_SAMPLES="!{CONTROL_SAMPLES}"
-NORMALIZATION="!{NORMALIZATION}"
-WINDOW_SIZE="!{WINDOW_SIZE}"
-report_name="!{report_name}"
+NUM="!{meta.num}"
+TREATMENT_NAME="!{meta.treatment_name}"
+CONTROL_NAME="!{meta.control_name}"
+TREATMENT_SAMPLES="!{meta.treatment_samples}"
+CONTROL_SAMPLES="!{meta.control_samples}"
+NORMALIZATION="!{meta.normalization}"
+WINDOW_SIZE="!{meta.window_size}"
+report_name="!{meta.report_name}"
 output_dir="!{output_dir}"
 
 PEAKCALLER="!{peakcaller}"
