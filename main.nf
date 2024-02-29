@@ -506,7 +506,7 @@ process collect_metrics {
         --OUTPUT ${sample_id}.CollectMultipleMetrics
 
     ## only for paired-end
-    if [[ $library == "single-end" ]];
+    if [[ $library == "paired-end" ]];
     then
     picard \
         CollectInsertSizeMetrics \
