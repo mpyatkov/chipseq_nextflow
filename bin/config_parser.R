@@ -105,6 +105,10 @@ final_diffreps_config <- t1 %>% left_join(t2, by = "group_id") %>%
 final_sample_labels <- sample_labels %>% 
   left_join(final_groups)
 
+### limit fastq config only by samples presented in sample_labels
+### even if index file is bigger we can calculate only subset of samples
+fastq<-inner_join(fastq, final_sample_labels %>% select(sample_id))
+
 write_csv(final_sample_labels, "sample_labels.csv", col_names = T)
 write_csv(final_diffreps_config, "diffreps_config.csv", col_names = F)
 write_csv(fastq, "fastq_config.csv", col_names = F)
