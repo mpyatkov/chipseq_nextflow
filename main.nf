@@ -627,7 +627,7 @@ workflow {
     bam_count(bowtie2_align.output.bam)
     
     macs2_callpeak(bam_count.output.final_bam, mm9_chrom_sizes)
-    epic2_callpeak(bam_count.output.fragments, mm9_chrom_sizes)
+    epic2_callpeak(bam_count.output.fragments_bed6, mm9_chrom_sizes)
     
     
     //peak union (MACS2 / EPIC2(SICER))
