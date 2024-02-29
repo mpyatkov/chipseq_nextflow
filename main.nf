@@ -521,8 +521,11 @@ process fastqc {
     tag "${sample_id}"
     cpus 4
     time '3h'
-    memory '16 GB'
-    // publishDir path: "${params.output_dir}/${sample_id}/metrics/", mode: "copy", overwrite: true
+    memory '32 GB'
+    errorStrategy 'retry'
+    maxRetries 3
+    
+    publishDir path: "${params.output_dir}/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: true
     
     beforeScript 'source $HOME/.bashrc'
     
