@@ -113,7 +113,15 @@ process bam_count {
     
     sambamba view -h -t $task.cpus -f bam -F "[XS] == null and not unmapped ${filter_bedpe}" $bam > 1.bam
     sambamba sort -n -t $task.cpus 1.bam
-    bedtools bamtobed ${bedtools_bedpe} -i 1.sorted.bam > ${sample_id}_fragments.bed 2> /dev/null
+
+    ## extracting fragments
+    ## for single-end it will be read themselfs
+    ## for paired-end (start1,end1 - start2,end2) it will be difference (start1,end2)
+    if [[ ${library} == "single-end" ]]; then
+        bedtools bamtobed ${bedtools_bedpe} -i 1.sorted.bam > ${sample_id}_fragments.bed 2> /dev/null
+    else
+        bedtools bamtobed ${bedtools_bedpe} -i 1.sorted.bam | cut -f 1,2,6 > ${sample_id}_fragments.bed 2> /dev/null
+    fi
 
     awk -v OFS='\t' '{print \$1,\$2,\$3,".","0","."}' ${sample_id}_fragments.bed > ${sample_id}_fragments_bed6.bed
 
@@ -201,7 +209,7 @@ process peak_union {
     script:
     """
     module load bedtools
-    set -x
+    #set -x
     cat * > tmp.bed
     sort -k1,1 -k2,2n tmp.bed > tmp1.bed
     bedtools merge -i tmp1.bed > peak_union.bed
