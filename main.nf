@@ -29,7 +29,8 @@ process bowtie2_align {
     beforeScript 'source $HOME/.bashrc'
     
     publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted.bam*", overwrite: true
-    // publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "library.txt", overwrite: true
+    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "*.log", overwrite: true
+    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "library.txt", overwrite: true
     
     input:
     tuple val(sample_id), val(r1), val(r2)
@@ -55,7 +56,7 @@ process bowtie2_align {
     // TODO: remove prefixes in script and use usual sam and bam, rename later in publishdir
     
     """
-    #echo "${sample_id} library: ${library}"
+    echo "${sample_id}: ${library}" > library.txt
     module load bowtie2
     module load samtools
     bowtie2 -p $task.cpus -x $params.bowtie2_index $reads_args -S ${sample_id}_bowtie2.sam 2> ${sample_id}.bowtie2.log
