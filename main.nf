@@ -690,7 +690,7 @@ workflow {
         .mix(macs2_callpeak.out.broad_bb)
         .mix(macs2_callpeak.out.narrow_bb)
         .mix(epic2_callpeak.out.epic2_bb)
-        .mix(bam_count.out.final_bam.map{it->[it[0],it[2]]})
+        //.mix(bam_count.out.final_bam.map{it->[it[0],it[2]]}) //excluded bam track lines
         .map{it->[it[0], it[1].getName()]}
         .collectFile{item -> item.join(",")+'\n'}
         .combine(parse_configuration_xls.out.sample_labels_config)
@@ -718,7 +718,8 @@ workflow {
     bam_files=bam_count.out.final_bam.map{it->[it[2],it[3]]}
     diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]}
     
-    track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect()
+    // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
+    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files).collect()
     copy_files_to_server(track_files_to_server, track_lines)
 
     //picard
