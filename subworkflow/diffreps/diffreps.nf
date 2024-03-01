@@ -42,6 +42,9 @@ process diffreps_summary {
     executor 'local'
     // cpus 16
     // echo true
+    errorStrategy 'retry'
+    maxRetries 2
+
     
     publishDir path: "${params.output_dir}/diffreps_output/", mode: "copy", pattern: "${output_dir}/*", overwrite: true
     
