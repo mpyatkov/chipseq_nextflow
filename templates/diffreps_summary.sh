@@ -50,7 +50,8 @@ mkdir -p ucsc_tracks && cp *.bed ./ucsc_tracks
 for bed in `find . -name "*_FILTERED*.bed"`; do
     cat ${bed} | grep -vE "track|chrM|random" > tmp.bed
     bedtools sort -i tmp.bed > tmp.sorted.bed
-    bedToBigBed -allow1bpOverlap tmp.sorted.bed ${mm9_chrom_sizes} "${output_dir}.bb"
+    bedClip tmp.sorted.bed ${mm9_chrom_sizes} tmp.sorted.clipped.bed
+    bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${output_dir}.bb"
     rm tmp.bed
 done
 
