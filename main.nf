@@ -572,7 +572,8 @@ process multiqc {
 
     cpus 1
     publishDir path: "${params.output_dir}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: true
-
+    publishDir path: "/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: true
+    
     beforeScript 'source $HOME/.bashrc'
     
     input:
