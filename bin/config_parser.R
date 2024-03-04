@@ -55,7 +55,7 @@ diffreps <- get_table(argv$input_xlsx, sheet_number = 2, marker = "exp_num", shi
 groups <- get_table(argv$input_xlsx, sheet_number = 2, marker = "group_description", shift = -1, num_cols = 3,row_limit = 50)
 
 ### for each "auto" in groups config we need to assign specific color
-all_colors<-c("204,0,204","204,77,0","0,127,204","146,166,196","66,162,66","194,86,2","40,150,160","255,86,0","0,153,153","130,130,210","80,80,160","20,150,88")
+all_colors<-rep(c("20,150,88","204,77,0","0,127,204","66,162,66","194,86,2","40,150,160","255,86,0","0,153,153","130,130,210","80,80,160","204,0,204"),3)
 
 ### remove colors which already in groups config
 available_colors <- setdiff(all_colors, 
