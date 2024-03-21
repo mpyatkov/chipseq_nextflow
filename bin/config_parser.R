@@ -2,26 +2,30 @@
 
 library(readxl)
 library(tidyr)
-library(dplyr)
+#suppressMessages(library(dplyr))
+library(dplyr, warn.conflicts = FALSE)
 library(stringr)
 library(readr)
 library(argparser)
 
+# Suppress summarise info
+options(dplyr.summarise.inform = FALSE)
+
 ParseArguments <- function() {
   p <- arg_parser('Parsing XLSX configuration file')
   p <- add_argument(p,'--input_xlsx', default="sample_labels.xslx", help="xlsx configuration file")
+  p <- add_argument(p,'--output_dir', default="raw_configs", help="directory to output")
   return(parse_args(p))
 }
 
 argv <- ParseArguments()
-
 
 #setwd("/projectnb/wax-dk/max/CTCF_Rad21_CHIPSEQ")
 
 get_table <- function(path_to_file, sheet_number, marker, shift, num_cols,row_limit) {
   
   ## config to matrix for more convenient search of markers
-  mx <- read_excel(path = path_to_file, sheet = sheet_number) %>% as.matrix()
+  mx <- read_excel(path = path_to_file, sheet = sheet_number, .name_repair = "unique_quiet") %>% as.matrix()
   
   ## find table start, apply shift if marker column in the middle of the table
   ts <- which(mx==marker, arr.ind=TRUE) %>% 
@@ -88,7 +92,7 @@ t2 <- sample_labels %>%
 
 ## collapse groups and make final configuration file for diffreps
 final_diffreps_config <- t1 %>% left_join(t2, by = "group_id") %>% 
-  left_join(groups %>% select(group_id, group_description)) %>% 
+  left_join(groups %>% select(group_id, group_description), by = "group_id") %>% 
   group_by(exp_num, normalization, window, group_type) %>% 
   summarise(combined_samples = unique(samples) %>% str_c(collapse = "|"), 
             combined_group_desc = unique(group_description) %>% str_c(collapse = "_and_")) %>% 
@@ -103,12 +107,17 @@ final_diffreps_config <- t1 %>% left_join(t2, by = "group_id") %>%
   
 ### prepare sample_labels config
 final_sample_labels <- sample_labels %>% 
-  left_join(final_groups)
+  left_join(final_groups, by = "group_id")
 
 ### limit fastq config only by samples presented in sample_labels
 ### even if index file is bigger we can calculate only subset of samples
-fastq<-inner_join(fastq, final_sample_labels %>% select(sample_id))
+fastq<-inner_join(fastq, final_sample_labels %>% select(sample_id), by = "sample_id")
 
-write_csv(final_sample_labels, "sample_labels.csv", col_names = T)
-write_csv(final_diffreps_config, "diffreps_config.csv", col_names = F)
-write_csv(fastq, "fastq_config.csv", col_names = F)
+write_csv(final_sample_labels, str_glue("{argv$output_dir}/sample_labels.csv"), col_names = T)
+
+## write config only if there is no any diffreps configuration
+if(!all(is.na(final_diffreps_config))){
+  write_csv(final_diffreps_config, str_glue("{argv$output_dir}/diffreps_config.csv"), col_names = F)  
+}
+
+write_csv(fastq, str_glue("{argv$output_dir}/fastq_config.csv"), col_names = F)
