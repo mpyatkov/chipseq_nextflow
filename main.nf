@@ -5,17 +5,24 @@ mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: tru
 mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", checkIfExists: true)
 default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
 
-
 params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
 params.output_dir="./RESULTS"
 params.peakcaller="MACS2"
 params.dataset_label="TEST1"
+params.copy_to_server_bool=false
+params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
+params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
+params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
 
-// params.xlsx_config = file("$projectDir/hnf6_samples.xlsx", checkIfExists: true)
-// params.xlsx_config = file("./hnf6_samples.xlsx", checkIfExists: true)
-params.xlsx_config = file(params.input_config, checkIfExists: true)
+// need_diffexpr = is_empty_file(params.diffreps_config.toString()) ? false : true
+
+// println(params.input_configs)
+// println(params.diffreps_config)
+// println(params.fastq_config)
+// println(params.sample_labels_config)
 
 include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
+include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
 
 process bowtie2_align {
 
@@ -373,22 +380,22 @@ process create_diffreps_tracks {
 }
 
 
-process parse_configuration_xls {
-    executor 'local'
-    input:
-    path(xlsx)
+// process parse_configuration_xls {
+//     executor 'local'
+//     input:
+//     path(xlsx)
 
-    output:
-    path("sample_labels.csv"), emit: sample_labels_config
-    path("diffreps_config.csv"), emit: diffreps_config
-    path("fastq_config.csv"), emit: fastq_config
+//     output:
+//     path("sample_labels.csv"), emit: sample_labels_config
+//     path("diffreps_config.csv"), emit: diffreps_config, optional: true
+//     path("fastq_config.csv"), emit: fastq_config
 
-    script:
-    """
-    module load R
-    config_parser.R --input_xlsx ${xlsx}
-    """
-}
+//     script:
+//     """
+//     module load R
+//     config_parser.R --input_xlsx ${xlsx}
+//     """
+// }
 
 process epic2_callpeak {
     tag "${sample_id}"
@@ -475,7 +482,7 @@ process copy_files_to_server {
     // output:
     // path("*.{bw,bam,bai,bb,txt}")
     // stdout
-
+    
     script:
     data_path="/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}"
     """
@@ -618,21 +625,55 @@ process multiqc {
 //     """
 // }
 
+process checkifempty {
+    executor "local"
+    echo true
+    input:
+    path(f)
+    output:
+    stdout
 
+    script:
+    println "In process: " + f.getClass()
+    """
+    echo "FILE: $f"
+    """
+    
+}
+
+def is_empty_file(fp) {
+    File file = new File(fp);
+    return !file.exists() || file.length() == 0
+}
 
 workflow {
-
-    parse_configuration_xls(params.xlsx_config)
+    // parse_configuration_xls(params.xlsx_config)
     // parse_configuration_xls.out.sample_labels_config | view
     // parse_configuration_xls.out.diffreps_config | view
-    // parse_configuration_xls.out.fastq_config.splitCsv() | view
-    // parse_configuration_xls.out.fastq_config.splitCsv() | read12_tester
+    // test = parse_configuration_xls.out.diffreps_config.ifEmpty(false)
+    // .ifEmpty{exit 1, "Cannot find any input RDS files for Module 3"}
 
+    fastq_config_ch = Channel.from(params.fastq_config)
+    sample_labels_config_ch = Channel.from(params.sample_labels_config)
+    diffreps_config_ch = Channel.from(params.diffreps_config)
     
-    // fastq = Channel.fromPath( './hnf6.csv' ).splitCsv()
-    fastq_reads_ch = parse_configuration_xls.out.fastq_config.splitCsv()
+    // if (is_empty_file(params.diffreps_config.toString())) {
+    //     println(params.diffreps_config.toString())
+    //     println("File is empty")
+    // } else {
+    //     println("File is not empty")
+    // }
+
+    // parse_configuration_xls.out.diffreps_config.splitCsv() 
+    // parse_configuration_xls.out.fastq_config.splitCsv() | read12_tester
+    // checkifempty(parse_configuration_xls.out.diffreps_config)
+    // parse_configuration_xls.out.diffreps_config | view
     
-    bowtie2_align(fastq_reads_ch, mm9_black_complement)
+    // // fastq = Channel.fromPath( './hnf6.csv' ).splitCsv()
+    // fastq_reads_ch = parse_configuration_xls.out.fastq_config.splitCsv()
+    // fastq_reads_ch = params.fastq_config.splitCsv() | view()
+
+    bowtie2_align(fastq_config_ch.splitCsv(), mm9_black_complement)
     
     bam_count(bowtie2_align.output.bam)
     
@@ -670,19 +711,42 @@ workflow {
     // log.info("params.peakcaller: $params.peakcaller")
 
     if (params.peakcaller == "MACS2") {
-        extra_columns = macs2_callpeak.out.xls
+        extra_columns = macs2_callpeak.out.xls // for diffreps summary
+        peaks_for_manorm2 = macs2_callpeak.out.narrow_bed
     } else {
-        extra_columns = epic2_callpeak.out.bed6
+        extra_columns = epic2_callpeak.out.bed6 // for diffreps summary
+        peaks_for_manorm2 = epic2_callpeak.out.bed6
     }
 
     DIFFREPS(
-        parse_configuration_xls.out.diffreps_config,
-        parse_configuration_xls.out.sample_labels_config,
+        // parse_configuration_xls.out.diffreps_config,
+        diffreps_config_ch,
+        // parse_configuration_xls.out.sample_labels_config,
+        sample_labels_config_ch,
         bam_count.out.fragments_bed6,
         calc_norm_factors.out,
         extra_columns, //macs2_callpeak.out.xls
         mm9_chrom_sizes
     )
+
+    MANORM2(
+        diffreps_config_ch,
+        bam_count.out.fragments,
+        peaks_for_manorm2
+    )
+
+    // MANORM2.out.profile | view
+    manorm2_group_report_ch = MANORM2.out.diff_table
+        .map{meta, rest -> [meta.group_name, rest]}
+    
+    diffreps_group_report_ch = DIFFREPS.out.full_report
+        .map{meta, rest -> [meta.group_name, rest]}
+        .groupTuple() 
+
+    combined_manorm2_diffreps_ch = diffreps_group_report_ch.join(manorm2_group_report_ch)
+    diffreps_manorm2_overlap(combined_manorm2_diffreps_ch)
+    
+    
     
     // TRACKS (copying, generating track lines)
     // create_bigwig_files 
@@ -703,17 +767,14 @@ workflow {
         //.mix(bam_count.out.final_bam.map{it->[it[0],it[2]]}) //excluded bam track lines
         .map{it->[it[0], it[1].getName()]}
         .collectFile{item -> item.join(",")+'\n'}
-        .combine(parse_configuration_xls.out.sample_labels_config)
-
+        .combine(sample_labels_config_ch)
 
     group_specific_ch = DIFFREPS.out.diffreps_track 
         .map{it->[it[0], it[2].getName()]}
         .collectFile{item -> item.join(",")+'\n'}
-        .combine(parse_configuration_xls.out.diffreps_config)
-
+        .combine(diffreps_config_ch)
 
     create_sample_specific_tracks(sid_specific_ch)
-    // create_sample_specific_tracks.out |view
 
     create_diffreps_tracks(group_specific_ch)
 
@@ -730,12 +791,15 @@ workflow {
     
     // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
     track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files).collect()
-    copy_files_to_server(track_files_to_server, track_lines)
+    
+    if (params.copy_to_server_bool){
+        copy_files_to_server(track_files_to_server, track_lines)
+    }
 
     //picard
     collect_metrics(bam_count.out.final_bam)
     
-    fastqc(fastq_reads_ch)
+    fastqc(fastq_config_ch.splitCsv())
 
     // bowtie2_align.out.log | view
     // bam_count.out.stats | view
@@ -762,3 +826,22 @@ workflow {
 
 }
 
+//TODO: To avoid multiple if conditions that diffreps config exists
+// it is required to pack creating tracks to separate workflow
+
+process diffreps_manorm2_overlap {
+    tag "${group_name}"
+    executor 'local'
+    beforeScript 'source $HOME/.bashrc'
+    echo true
+    
+    input:
+    tuple val(group_name), path(diffreps_reports), path(manorm2_report)
+    output:
+    stdout
+    script:
+    """
+    module load R
+    ls -l
+    """
+}
