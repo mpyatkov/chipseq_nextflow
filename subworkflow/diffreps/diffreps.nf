@@ -54,6 +54,7 @@ process diffreps_summary {
     
     output:
     tuple val(meta.num), path("${output_dir}/*")
+    tuple val(meta), path("*.xlsx"), emit: full_report
     tuple val(meta.group_name), path("Hist*.pdf"), emit: hist_pdf
     tuple val(meta.group_name), path("FDR*.pdf"), emit: fdr_pdf
     tuple val(meta.group_name), path("Bar*.pdf"), emit: bar_pdf
@@ -117,9 +118,15 @@ workflow DIFFREPS {
 
     main:
 
-    diffreps_params = diffreps_config
+    input_params = diffreps_config
         .splitCsv() 
-        .map{it->create_diffreps_channel(it)} 
+        .map{it->create_diffreps_channel(it)}
+        .branch {
+            diffreps: it.normalization =~"DIFFREPS|RIPPM"
+            manorm2: true
+        }
+    
+    diffreps_params = input_params.diffreps
         .combine(
             fragments_bed6
                 .map{it->it[1]}
@@ -136,13 +143,13 @@ workflow DIFFREPS {
     dsummary_ch = diffreps_params.map{it -> it[0..-3]} // exclude bed6 files
         .join(diffreps.out)
         .combine(peakcaller_xls
-                 .map{it -> it[1]}.collect().toList())
+                 .map{it -> it[1]}.collect().toSortedList())
         .map{meta,diffout,xls ->
             //filter xls only participating in comparison
             def new_xls = xls.findAll{it =~ "${meta.treatment_samples}|${meta.control_samples}"} 
-            return [meta, diffout, xls]}
+            return [meta, diffout, new_xls]}
         .combine(sample_labels_config)
-    
+
     diffreps_summary(dsummary_ch, mm9_chrom_sizes)
     
     //aggregate diffpres pdfs
@@ -163,7 +170,7 @@ workflow DIFFREPS {
         .toList()
         .combine(norm_factors) | collect_diffreps_norm_factors
     
-    
     emit:
     diffreps_track = diffreps_summary.out.diffreps_track
+    full_report = diffreps_summary.out.full_report
 }
