@@ -346,7 +346,6 @@ plot_histogram <- function(df, delta_column, log2fc_cutoff, min_avg_count, filte
       } else {
         .
       }} %>%
-    print() %>% 
     drop_na(delta) %>% 
     add_count(delta) %>% 
     mutate(delta = as.factor(str_glue("{delta} ({n})"))) %>% 
@@ -542,8 +541,8 @@ gr.ann.noblack.extra %>%
          t2 = ".",
          t3 = 0,
          t4 = 0,
-         t5 = case_when(Event == "Down" ~ "0,0,255",
-                        TRUE ~ "255,0,0")) %>% 
+         t5 = case_when(Event == "Down" ~ "255,0,0",
+                        TRUE ~ "0,0,255")) %>% 
   select(-Event) %>% 
   arrange(seqnames,start) %>% 
   write_tsv(file = ucsc_fname_unfiltered, append = T, col_names = F)
@@ -565,8 +564,8 @@ gr.ann.noblack.extra %>%
          t2 = ".",
          t3 = 0,
          t4 = 0,
-         t5 = case_when(Event == "Down" ~ "0,0,255",
-                        TRUE ~ "255,0,0")) %>% 
+         t5 = case_when(Event == "Down" ~ "255,0,0",
+                        TRUE ~ "0,0,255")) %>% 
   select(-Event) %>% 
   arrange(seqnames,start) %>% 
   write_tsv(file = ucsc_fname_filtered, append = T, col_names = F)
