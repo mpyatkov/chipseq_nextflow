@@ -61,6 +61,8 @@ workflow MANORM2 {
         } | manorm2_create_profile
         
     manorm2_diffexp(manorm2_create_profile.out.profile)
+
+    manorm2_diffexp.out.manorm2_historagms.collect() | aggregate_manorm_pdf
     
     emit:
     profile = manorm2_create_profile.out.profile
@@ -103,16 +105,19 @@ process manorm2_diffexp {
 
     executor 'local'
     beforeScript 'source $HOME/.bashrc'
-    //publishDir path: "${params.output_dir}/manorm2_output/, mode: "copy", pattern: "*.xls", overwrite: true
+    publishDir path: "${params.output_dir}/manorm2_output/${meta.num}_MANORM2_${meta.group_name}/", mode: "copy", pattern: "*.{xlsx,pdf,bed}", overwrite: true
     
     input:
     tuple val(meta), path(profile)
 
     output:
-    tuple val(meta), path(output_name), emit: diff_table
-
+    tuple val(meta), path("*.xlsx"), emit: diff_table
+    tuple val(meta), path("*.bed"), emit: bed_track
+    path("*.pdf"), emit: manorm2_historagms
+    
+    
     script:
-    output_name = "${meta.group_name}_MANORM2.xlsx"
+    output_prefix = "${meta.group_name}_MANORM2"
     
     """
     module load R
@@ -123,6 +128,24 @@ process manorm2_diffexp {
         --treatment_samples '${meta.treatment_samples}' \
         --control_name ${meta.control_name} \
         --treatment_name ${meta.treatment_name} \
-        --output_name ${output_name} 
+        --output_prefix ${output_prefix} 
+    """
+}
+
+process aggregate_manorm_pdf {
+    tag("${group_name}")
+    executor 'local'
+    publishDir path: "${params.output_dir}/manorm2_output/", mode: "copy", pattern: "*.pdf", overwrite: true
+    
+    input:
+    path(hist)
+
+    output:
+    path("Aggregated_Manorm2_Histograms.pdf")
+
+    script:
+    """
+    module load poppler
+    pdfunite $hist "Aggregated_Manorm2_Histograms.pdf"
     """
 }
