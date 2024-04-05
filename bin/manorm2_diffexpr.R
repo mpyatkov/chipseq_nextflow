@@ -37,8 +37,10 @@ print(argv)
 
 DEBUG <- F
 if (DEBUG) {
-  argv$manorm2_profile <-  "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/work/55/3314c2c968a9e297771a3f8b8cebea/Male_3wk_H3K27ac_vs_Female_3wk_H3K27ac_profile_bins.xls"
-  argv$treatment_samples <- "G222_M16|G222_M17"
+  # argv$manorm2_profile <-  "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/work/55/3314c2c968a9e297771a3f8b8cebea/Male_3wk_H3K27ac_vs_Female_3wk_H3K27ac_profile_bins.xls"
+  # argv$treatment_samples <- "G222_M16|G222_M17"
+  argv$manorm2_profile <- "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/work/8e/5f595d5c7ba276620c299856439cb5/Female_8wk_H3K27ac_vs_Female_3wk_H3K27ac_profile_bins.xls"
+  argv$treatment_samples <- "G207_M03|G207_M04|G222_M11|G222_M12"
   argv$control_samples <- "G222_M18|G222_M19|G222_M20"
   argv$treatment_name <- "Male_8wk_H3K27ac"
   argv$control_name <- "Male_3wk_H3K27ac"
@@ -47,6 +49,16 @@ if (DEBUG) {
 min_avg_count <- 20
 log2fc_cutoff <- 1
 log2fc_label <- 2^log2fc_cutoff
+swap_colors <- T ## swap red/blue colors on histogram and output tracks
+
+## colors for histograms and output tracks
+histogram_colors <- if (swap_colors){
+  ## down - red, up - blue
+  c("red","lightpink", "skyblue","blue")
+} else {
+  ## up - red, down - blue
+  c("blue", "skyblue", "lightpink", "red")
+}
 
 ### manorm2 read and filtering input file
 mx.manorm2 <- read_tsv(argv$manorm2_profile, col_names = T) %>% 
@@ -98,48 +110,62 @@ mx.manorm2.diff <- mx.manorm2 %>%
 
 
 mx.manorm2.diff <- mx.manorm2.diff %>% 
-  mutate(delta = case_when(Mval < 0 & abs(Mval) > log2fc_cutoff & padj < 0.05 ~ str_glue("2_{argv$control_name}_Signif_sites"),
-                           Mval > 0 & abs(Mval) > log2fc_cutoff & padj < 0.05 ~  str_glue("3_{argv$treatment_name}_Signif_sites"),
-                           abs(Mval) <= log2fc_cutoff & padj < 0.05 ~ str_glue("1_Less_{log2fc_label}-fold"),
+  mutate(delta = case_when(Mval < 0 & abs(Mval) > log2fc_cutoff & padj < 0.05 ~ str_glue("1_{argv$control_name}_Signif_sites"),
+                           Mval < 0 & abs(Mval) <= log2fc_cutoff & padj < 0.05 ~ str_glue("2_{argv$control_name}_Weakest_sites"),
+                           Mval > 0 & abs(Mval) > log2fc_cutoff & padj < 0.05 ~  str_glue("4_{argv$treatment_name}_Signif_sites"),
+                           Mval > 0 & abs(Mval) <= log2fc_cutoff & padj < 0.05 ~  str_glue("3_{argv$treatment_name}_Weakest_sites"),
                            .default = NA))
   
 mx.manorm2.diff %>% arrange(delta) %>% writexl::write_xlsx(path = str_glue("Summary_{argv$output_prefix}.xlsx"), col_names = T)
   
+#### add colors
+
+
+add_colors <- function(df, hist_colors) {
+
+  delta.ord <- df %>% select(delta) %>% 
+    distinct() %>% 
+    arrange(delta) %>% 
+    mutate(ord = as.numeric(str_extract(delta, "\\d+"))) 
   
+  hist.ord <- tibble(cols = hist_colors) %>% 
+    mutate(ord = row_number()) 
+  
+  delta.col <- left_join(x = delta.ord, y = hist.ord, join_by(ord)) %>% 
+    distinct() %>% 
+    arrange(ord) %>% 
+    select(-ord)
+    
+  left_join(df, delta.col, join_by(delta))
+  
+}
+
+mx.manorm2.diff <- add_colors(mx.manorm2.diff, hist_colors = histogram_colors)
+
 ##### CREATE HISTOGRAMS #####
+
 df.histogram <- mx.manorm2.diff %>% 
   filter(padj < 0.05) %>% 
   select(log2FC = Mval, delta) %>% 
-  drop_na(delta) 
-    
-plot_histogram <- function(df, log2fc_cutoff, title_extra = "", log2fc_label = 1, swap_colors = T) {
-  
-  histogram_colors <- if (swap_colors){
-    ## down - red, up - blue
-    c("grey","red", "blue")
-  } else {
-    ## up - red, down - blue
-    c("grey","blue", "red")    
-  }
-  
-  df.histogram <- df %>% 
-    drop_na(delta) %>% 
-    add_count(delta) %>% 
-    mutate(delta = as.factor(str_glue("{delta} ({n})"))) %>% 
-    select(-n) %>% 
-    mutate(ord = as.numeric(str_extract(delta, "\\d+")))
-  
-  arranged_colors <- tibble(cols = histogram_colors) %>% 
-    mutate(ord = row_number()) %>%
-    left_join(x = df.histogram %>% select(ord), y = ., join_by(ord)) %>% 
-    distinct() %>% 
-    arrange(ord) %>% 
-    pull(cols)
-    
+  drop_na(delta) %>% 
+  add_count(delta) %>% 
+  arrange(delta) %>% 
+  mutate(delta = as.factor(str_glue("{delta} ({n})"))) %>% 
+  select(-n) #%>% 
+  # mutate(ord = as.numeric(str_extract(delta, "\\d+")))
+
+arranged_colors <- mx.manorm2.diff %>% 
+  select(delta,cols) %>% 
+  drop_na() %>%
+  distinct() %>%
+  arrange(delta) %>% 
+  pull(cols) 
+
+plot_histogram <- function(df.histogram, log2fc_cutoff, title_extra = "", log2fc_label = 1, arranged_colors) {
+
   ggplot(df.histogram, aes(x=log2FC, fill = delta))+ #factor(delta, levels = names(cols_vector))
     geom_histogram(binwidth=.1)+ ## alpha = 0.9
     scale_fill_manual(name = str_glue("Site_Category ({nrow(df.histogram)} total sites)"), 
-                      #values = histogram_colors,
                       values = arranged_colors, 
                       drop = FALSE)+
     ggtitle(str_glue("{title_extra}")) + 
@@ -156,29 +182,24 @@ title_manorm2 <-  str_glue("{argv$treatment_name} / {argv$control_name}.\nFold C
                           "Less_{log2fc_label}-fold filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
 
 
-hist.plot <- plot_histogram(df.histogram, log2fc_cutoff = log2fc_cutoff, title_extra = title_manorm2, log2fc_label = log2fc_label, swap_colors = T)
+hist.plot <- plot_histogram(df.histogram, log2fc_cutoff = log2fc_cutoff, title_extra = title_manorm2, log2fc_label = log2fc_label, arranged_colors = arranged_colors)
 #output_name_histograms <- str_glue("Histograms_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}_{normalization_caller}.pdf")
 ggsave(str_glue("{argv$output_prefix}_Histograms.pdf"), plot = hist.plot, height = 9, width = 9)
-
 
 ##### CREATE BED TRACKS #####
 ucsc_fname_filtered <- str_glue("UCSC_FILTERED_track_{argv$treatment_name}_vs_{argv$control_name}_{argv$peakcaller}_MANORM2.bed")
 ucsc_header_filtered <- str_glue("track name=FILTERED_{argv$treatment_name}_vs_{argv$control_name}_{argv$peakcaller}_MANORM2 visibility=4 itemRgb=On")
 write_lines(ucsc_header_filtered, ucsc_fname_filtered)
 mx.manorm2.diff %>% 
-  filter(str_detect(delta,"Signif")) %>% 
-  #filter(padj < 0.05) %>% 
-  select(chrom, start, end, Mval) %>% 
-  mutate(t0 = case_when(Mval < 0 & abs(Mval) > log2fc_cutoff ~ argv$control_name,
-                           Mval > 0 & abs(Mval) > log2fc_cutoff  ~ argv$treatment_name,
-                           .default = NA)) %>% 
-  drop_na(t0) %>% 
+  drop_na(delta) %>% 
+  select(chrom, start, end, delta, cols) %>% 
+  rowwise() %>% 
   mutate(t1 = 1000,
          t2 = ".",
          t3 = 0,
          t4 = 0,
-         t5 = ifelse(t0 == argv$control_name, "255,0,0", "0,0,255")) %>%
-  select(-Mval) %>% 
+         t5 = paste0(col2rgb(cols), collapse = ",")) %>%
+  select(-cols) %>% 
   arrange(chrom,start) %>% 
   write_tsv(file = ucsc_fname_filtered, append = T, col_names = F)
   
