@@ -54,10 +54,10 @@ swap_colors <- T ## swap red/blue colors on histogram and output tracks
 ## colors for histograms and output tracks
 histogram_colors <- if (swap_colors){
   ## down - red, up - blue
-  c("red","lightpink", "skyblue","blue")
+  c("red","pink", "lightblue","blue")
 } else {
   ## up - red, down - blue
-  c("blue", "skyblue", "lightpink", "red")
+  c("blue", "lightblue", "pink", "red")
 }
 
 ### manorm2 read and filtering input file
