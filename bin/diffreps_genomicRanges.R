@@ -60,6 +60,7 @@ treatment_samples <- argv$treatment_samples %>% str_replace_all(., "\\|",",")
 control_samples <- argv$control_samples %>% str_replace_all(., "\\|",",")
 
 log2fc_label <- 2^log2fc_cutoff
+swap_colors <- TRUE
 
 DEBUG <- FALSE
 
@@ -231,31 +232,50 @@ gr.ann.noblack.extra <- gr.ann.noblack.extra %>%
   #filter(padj < 0.05) %>%
   as_granges()
 
-###### add filtered/unfiltered delta columns with information about marginal sites
-add_delta <- function(df, control_name, treatment_name, log2fc_cutoff, min_avg_count){
-  col_names <- c(str_glue("4_{control_name}_Signif_sites"),
-                 str_glue("1_{control_name}_Marginal_sites"),
-                 str_glue("3_Less_{log2fc_label}-fold"),
-                 str_glue("2_{treatment_name}_Marginal_sites"),
-                 str_glue("5_{treatment_name}_Signif_sites"))
+###### add delta columns with information about significant, weak and low reads sites
+gr.ann.noblack.extra <- gr.ann.noblack.extra %>% 
+  as_tibble() %>% 
+  mutate(delta = case_when(Event == "Down" & abs(log2FC) > log2fc_cutoff & Control.avg > min_avg_count & padj < 0.05  ~ str_glue("1_{CONTROL_NAME}_Signif_sites"), 
+                           Event == "Down" & abs(log2FC) <= log2fc_cutoff & Control.avg > min_avg_count & padj < 0.05 ~ str_glue("2_{CONTROL_NAME}_Weakest_sites"), 
+                           Event == "Up" & abs(log2FC) > log2fc_cutoff & Treatment.avg > min_avg_count & padj < 0.05 ~ str_glue("4_{TREATMENT_NAME}_Signif_sites"), 
+                           Event == "Up" & abs(log2FC) <= log2fc_cutoff & Treatment.avg > min_avg_count & padj < 0.05 ~ str_glue("3_{TREATMENT_NAME}_Weakest_sites"),
+                           abs(log2FC) > log2fc_cutoff ~ "0_Low_reads_sites", # low read region ## & (Treatment.avg <= min_avg_count | Control.avg <= min_avg_count)
+                           .default = NA)) %>% 
+  as_granges()
+
+
+add_colors <- function(df_tmp, hist_colors) {
   
-  df.delta <- df %>% 
-    as_tibble() %>% 
-    filter(padj < 0.05) %>% 
-    mutate(delta = case_when(Event == "Down" & abs(log2FC) > log2fc_cutoff & Control.avg > min_avg_count ~ col_names[[1]],
-                             Event == "Down" & abs(log2FC) > log2fc_cutoff & Control.avg <= min_avg_count ~ col_names[[2]],
-                             Event == "Up" & abs(log2FC) > log2fc_cutoff & Treatment.avg <= min_avg_count ~ col_names[[4]],
-                             Event == "Up" & abs(log2FC) > log2fc_cutoff & Treatment.avg > min_avg_count ~ col_names[[5]],
-                             abs(log2FC) <= log2fc_cutoff & (Treatment.avg > min_avg_count | Control.avg > min_avg_count) ~ col_names[[3]],
-                             .default = NA)) %>% 
-    select(seqnames, start, end, delta) %>% 
-    drop_na(delta) %>% 
-    as_granges()
+  df <- df_tmp %>% as_tibble()
+  delta.ord <- df %>% 
+    select(delta) %>% 
+    distinct() %>% 
+    arrange(delta) %>% 
+    mutate(ord = as.numeric(str_extract(delta, "\\d+"))+1) 
+  
+  hist.ord <- tibble(cols = hist_colors) %>% 
+    mutate(ord = row_number()) 
+  
+  delta.col <- left_join(x = delta.ord, y = hist.ord, join_by(ord)) %>% 
+    distinct() %>% 
+    arrange(ord) %>% 
+    select(-ord)
+  
+  left_join(df, delta.col, join_by(delta)) %>% as_granges()
+  
 }
 
-delta_columns <- add_delta(gr.ann.noblack.extra, CONTROL_NAME, TREATMENT_NAME,log2fc_cutoff, min_avg_count)
-gr.ann.noblack.extra <- join_overlap_left(gr.ann.noblack.extra, delta_columns)
+histogram_colors <- if (swap_colors){
+  ## down - red, up - blue
+  c("gray", "red","pink", "lightblue","blue")
+} else {
+  ## up - red, down - blue
+  c("gray", "blue", "lightblue", "pink", "red")
+}
 
+gr.ann.noblack.extra <- add_colors(gr.ann.noblack.extra, histogram_colors)
+# gr.ann.noblack.extra %>% as_tibble() %>% glimpse()
+gr.ann.noblack.extra %>% as_tibble() %>% pull(cols) %>% table
 
 #### PLOT DATA
 #### FDR (0.05, 0.01, 0.005, 0.001)
@@ -271,16 +291,16 @@ fdrs_plot <- function(fdrs, df, peakcaller_overlap_flag = F, extra_title = "") {
 
   df.barplot_fdr <- map_dfr(fdrs, function(fdr) {
     df %>% 
-      filter(if (!peakcaller_overlap_flag) {
+      as_tibble() %>% 
+      dplyr::filter(if (!peakcaller_overlap_flag) {
         significant == 1 & padj < fdr
       } else {
         significant == 1 & padj < fdr & peakcaller_overlap == 1
       }
       ) %>% 
       #filter(significant == 1 & padj < fdr & peakcaller_overlap == 1) %>% 
-      select(Event) %>% 
-      as_tibble() %>% 
-      dplyr::summarise(n = n(), .by = "Event") %>% 
+      dplyr::select(Event) %>% 
+      dplyr::summarise(n = dplyr::n(), .by = "Event") %>% 
       dplyr::mutate(FDR = fdr) 
   }) %>% left_join(fake,.) %>% 
     replace_na(list(n = 0))
@@ -320,13 +340,8 @@ ggsave(output_name_fdrbarchart, plot = final_fdr_barchart, height = 7, width = 1
 #### Histogram
 #### input: gr.ann.noblack.extra
 
-# S2_real_delta <- diffReps_output[diffReps_output$Event =="Down" & diffReps_output$log2FC < -(log2FC_cutoff) & diffReps_output$Control.avg > min_avg_count,]
-# S2_marginal_delta <- diffReps_output[diffReps_output$Event =="Down" & diffReps_output$log2FC < -(log2FC_cutoff) & diffReps_output$Control.avg <= min_avg_count,]
-# Less_2fold <- diffReps_output[diffReps_output$log2FC >= -(log2FC_cutoff) & diffReps_output$log2FC <= (log2FC_cutoff),]
-# # Less_2fold_label <- paste0("3.Less_",FC_cutoff_label,"-fold (",nrow(Less_2fold),")")
-# S1_marginal_delta <- diffReps_output[diffReps_output$Event =="Up" & diffReps_output$log2FC > (log2FC_cutoff) & diffReps_output$Treatment.avg <= min_avg_count,]
-# S1_real_delta <- diffReps_output[diffReps_output$Event =="Up" & diffReps_output$log2FC > (log2FC_cutoff) & diffReps_output$Treatment.avg > min_avg_count,]
-plot_histogram <- function(df, delta_column, log2fc_cutoff, min_avg_count, filter_by_peakcaller_overlap = F, title_extra = "", log2fc_label = 1, swap_colors = T) {
+
+plot_histogram_bk <- function(df, delta_column, log2fc_cutoff, min_avg_count, filter_by_peakcaller_overlap = F, title_extra = "", log2fc_label = 1, swap_colors = T) {
   
   histogram_colors <- if (swap_colors){
     ## down - red, up - blue
@@ -365,32 +380,59 @@ plot_histogram <- function(df, delta_column, log2fc_cutoff, min_avg_count, filte
           legend.text=element_text(size=10))
 }
 
+plot_histogram <- function(df, filter_by_peakcaller_overlap = F, title_extra = "") { ## df should be tibble not granges
+  df.histogram <- df %>% 
+    select(delta, log2FC, peakcaller_overlap, cols) %>% 
+    {
+      if(filter_by_peakcaller_overlap){
+        filter(., peakcaller_overlap == 1)
+      } else {
+        .
+      }} %>%
+    drop_na(delta) %>% 
+    add_count(delta) %>% 
+    arrange(delta) %>% 
+    mutate(delta = as.factor(str_glue("{delta} ({n})"))) %>% 
+    select(-n, -peakcaller_overlap) 
+  
+  arranged_colors <- df.histogram %>% 
+    select(delta,cols) %>% 
+    drop_na() %>%
+    distinct() %>%
+    arrange(delta) %>% 
+    pull(cols) 
+  
+  ggplot(df.histogram, aes(x=log2FC, fill = delta))+ #factor(delta, levels = names(cols_vector))
+    geom_histogram(binwidth=.1)+ ## alpha = 0.9
+    scale_fill_manual(name = str_glue("Site_Category ({nrow(df.histogram)} total sites)"), 
+                      values = arranged_colors, 
+                      drop = FALSE)+
+    ggtitle(str_glue("{title_extra}")) + 
+    ylab("Count of Condition-specific Regions") + 
+    xlab("log2(Fold Change)")+
+    theme_classic()+
+    theme(legend.background = element_rect(colour = "black"), 
+          legend.text=element_text(size=10))
+}
+
+
 title_unfiltered = str_glue("Unfiltered {TREATMENT_NAME} / {CONTROL_NAME}.\nFold Change for diffReps condition-specific sites\n",
                             "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                             "Marginal sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count <= {min_avg_count}\n",
                             "Less_{log2fc_label}-fold filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
-#title_unfiltered <- str_glue(top_header,"\n",title_unfiltered)
-hist_unfiltered <- plot_histogram(gr.ann.noblack.extra,
-                                  "delta_unfiltered",
-                                  log2fc_cutoff = log2fc_cutoff, 
-                                  min_avg_count = min_avg_count, 
-                                  filter_by_peakcaller_overlap = F, 
-                                  title_extra = title_unfiltered, 
-                                  log2fc_label = 2^log2fc_cutoff)
 
+hist_unfiltered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
+                                  filter_by_peakcaller_overlap = F, 
+                                  title_extra = title_unfiltered)
 
 title_filtered = str_glue("{peak_caller} filtered {TREATMENT_NAME} / {CONTROL_NAME}.\nFold Change for diffReps condition-specific sites\n",
                           "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                           "Marginal sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count <= {min_avg_count}\n",
                           "Less_{log2fc_label}-fold filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
-#title_filtered <- str_glue(top_header,"\n",title_filtered)
-hist_filtered <- plot_histogram(gr.ann.noblack.extra,
-                                "delta_filtered",
-                                log2fc_cutoff = log2fc_cutoff, 
-                                min_avg_count = min_avg_count, 
-                                filter_by_peakcaller_overlap = T, 
-                                title_extra = title_filtered, 
-                                log2fc_label = 2^log2fc_cutoff)
+
+hist_filtered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
+                                  filter_by_peakcaller_overlap = T, 
+                                  title_extra = title_filtered)
 
 histograms <- hist_unfiltered + hist_filtered+plot_annotation(title = top_header)
 #output_name_histograms <- str_glue("Histograms_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.pdf")
@@ -523,29 +565,25 @@ gr.hotspots.noblack %>%
 # S2_diff_screenshot <- S2_diff_screenshot[order(-S2_diff_screenshot$"log2FC"),]
 
 ### Control/Treatment bed files with different colors
-# S1_diff_data_BED <- cbind(S1_diff_data$"Chrom",S1_diff_data$"Start",S1_diff_data$"End",S1_diff,"1000",".","0","0","0,0,255")
-# S2_diff_data_BED <- cbind(S2_diff_data$"Chrom",S2_diff_data$"Start",S2_diff_data$"End",S2_diff,"1000",".","0","0","255,0,0")
-
 ucsc_fname_unfiltered <- str_glue("UCSC_UNFILTERED_track_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}_{normalization_caller}.bed")
 ucsc_header_unfiltered <- str_glue("track name=UNFILTERED_{histone_mark}_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}_{normalization_caller} visibility=4 itemRgb=On")
 write_lines(ucsc_header_unfiltered, ucsc_fname_unfiltered)
 
 gr.ann.noblack.extra %>% 
   as_tibble() %>% 
-  filter(significant == 1) %>% 
-  select(seqnames, start, end, Event) %>% 
-  mutate(
-    t0 = case_when(Event == "Down" ~ CONTROL_NAME,
-                   TRUE ~ TREATMENT_NAME),
-    t1 = 1000,
+  filter(str_detect(delta,"1_|2_|3_|4_")) %>% 
+  drop_na(delta) %>% 
+  select(seqnames, start, end, delta, cols) %>% 
+  rowwise() %>% 
+  mutate(t1 = 1000,
          t2 = ".",
          t3 = 0,
          t4 = 0,
-         t5 = case_when(Event == "Down" ~ "255,0,0",
-                        TRUE ~ "0,0,255")) %>% 
-  select(-Event) %>% 
+         t5 = paste0(col2rgb(cols), collapse = ",")) %>%
+  select(-cols) %>% 
   arrange(seqnames,start) %>% 
   write_tsv(file = ucsc_fname_unfiltered, append = T, col_names = F)
+  
 
 
 ## FILTERED, significant + peak_caller overlap
@@ -555,18 +593,16 @@ write_lines(ucsc_header_filtered, ucsc_fname_filtered)
 
 gr.ann.noblack.extra %>% 
   as_tibble() %>% 
-  filter(significant == 1 & peakcaller_overlap == 1) %>% 
-  select(seqnames, start, end, Event) %>% 
-  mutate(
-    t0 = case_when(Event == "Down" ~ CONTROL_NAME,
-                   TRUE ~ TREATMENT_NAME),
-    t1 = 1000,
+  filter(peakcaller_overlap == 1 & str_detect(delta,"1_|2_|3_|4_")) %>% 
+  drop_na(delta) %>% 
+  select(seqnames, start, end, delta, cols) %>% 
+  rowwise() %>% 
+  mutate(t1 = 1000,
          t2 = ".",
          t3 = 0,
          t4 = 0,
-         t5 = case_when(Event == "Down" ~ "255,0,0",
-                        TRUE ~ "0,0,255")) %>% 
-  select(-Event) %>% 
+         t5 = paste0(col2rgb(cols), collapse = ",")) %>%
+  select(-cols) %>% 
   arrange(seqnames,start) %>% 
   write_tsv(file = ucsc_fname_filtered, append = T, col_names = F)
 
@@ -576,6 +612,7 @@ gr.ann.noblack.extra %>%
 
 unfiltered_xls <- gr.ann.noblack.extra %>% 
   as_tibble() %>% 
+  select(-cols) %>% 
   relocate(any_of(c("peakcaller_overlap","down_significant","up_significant","significant")), .after = Control.avg) %>% 
   dplyr::rename(`Overlapped with peak caller` = peakcaller_overlap, 
                 `Significant CONTROL` = down_significant, 
@@ -608,6 +645,7 @@ writeData(wb, sheet = sheet_name, unfiltered_xls, startRow = 5, startCol = 1)
 
 filtered_xls <- join_overlap_left(gr.ann.noblack.extra %>% filter(peakcaller_overlap == 1), peakcaller_xls) %>%
   as_tibble() %>% 
+  select(-cols) %>% 
   distinct() %>% 
   {if (peak_caller == "MACS2") {mutate(., fake_score = fold_enrichment*pileup*length)} else {mutate(.,fake_score = fold_enrichment)}} %>% 
   group_by(seqnames, start, end, sample_id) %>% 
