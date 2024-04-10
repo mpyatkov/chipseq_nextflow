@@ -66,7 +66,7 @@ union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df)
   distinct() %>% 
   add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
-  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|2_")), .by = c(seqnames,start,end)) %>% 
+  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) %>% 
   select(-delta) %>% 
   pivot_wider(names_from = filename, values_from = c(coords, intensity.Control, intensity.Treatment, padj,log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
 
