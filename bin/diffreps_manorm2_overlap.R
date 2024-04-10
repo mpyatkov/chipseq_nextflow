@@ -30,52 +30,36 @@ if (DEBUG) {
   setwd("/projectnb2/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/temp")
 }
 
-## seqnames,start,end,log2FC,padj
-## filtered sites overlapped with MACS2 but without filtration by pvalue
-# diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>% 
-#   map_dfr(\(f){
-#     read_xlsx(path = f, skip = 4, sheet = 2) %>% 
-#       select(seqnames, start, end, contains("avg"),log2FC, padj, peakcaller_overlap = `Overlapped with peak caller`, delta) %>% 
-#       filter(peakcaller_overlap == 1 & !is.na(delta)) %>% 
-#       mutate(filename = f %>% tools::file_path_sans_ext()) %>% 
-#       select(-peakcaller_overlap, -delta)
-#   })
-
 diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>%
   map_dfr(\(f){
     readxl::read_xlsx(path = f, skip = 4, sheet = 2) %>%
-      select(seqnames, start, end, log2FC, padj,peakcaller_overlap = `Overlapped with peak caller`, delta) %>%
+      select(seqnames, start, end, contains("avg"),log2FC, padj,peakcaller_overlap = `Overlapped with peak caller`, delta) %>%
       filter(peakcaller_overlap == 1 & !is.na(delta) & padj < 0.05) %>%
       mutate(filename = f %>% tools::file_path_sans_ext()) %>%
       select(-peakcaller_overlap)
-  })
-
-## seqnames,start,end,log2FC,padj
-## MAnorm2 sites overlapped with MACS2
-# manorm2_df <- list.files(pattern = "MANORM2") %>% 
-#   map_dfr(\(f){
-#     read_xlsx(path = f, sheet = 1) %>% 
-#      select(seqnames = chrom, start, end, log2FC = Mval, padj, contains("treatment.mean"), contains("control.mean")) %>% 
-#      mutate(filename = f %>% tools::file_path_sans_ext())
-#   })
-
+  }) %>% 
+  rename_with(~str_replace(.x, "Control\\.avg", "intensity.Control")) %>% 
+  rename_with(~str_replace(.x, "Treatment\\.avg", "intensity.Treatment")) %>% 
+  mutate(coords = as.character(str_glue("{seqnames}:{start}-{end}")))
+  
 manorm2_df <- list.files(pattern = "MANORM2") %>%
   map_dfr(\(f){
     readxl::read_xlsx(path = f, sheet = 1) %>%
-      select(seqnames = chrom, start, end, log2FC = Mval, padj,delta) %>%
+      select(seqnames = chrom, start, end, contains("treatment.mean"), contains("control.mean"), log2FC = Mval, padj,delta) %>%
       #filter(padj < 0.05) %>%
       filter(!is.na(delta)) %>%  
       mutate(filename = f %>% tools::file_path_sans_ext())
-  })
+  }) %>% 
+  rename_with(~str_replace(.x, "(.*?)\\.control\\.mean", "intensity.Control")) %>% 
+  rename_with(~str_replace(.x, "(.*?)\\.treatment\\.mean", "intensity.Treatment")) %>% 
+  mutate(coords = as.character(str_glue("{seqnames}:{start}-{end}")))
+
 
 merged_union <- bind_rows(diffreps_df, manorm2_df) %>% 
   as_granges() %>% 
-  GenomicRanges::reduce(., min.gapwidth = 0L) %>% 
-  plyranges::mutate(overlap = 1)
+  GenomicRanges::reduce(., min.gapwidth = 0L)
 
-
-union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df) %>% 
-                                  as_granges()) %>% 
+union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df) %>% as_granges()) %>% 
   as_tibble() %>% 
   filter(padj == min(padj), .by = c(seqnames,start,end,filename)) %>% 
   filter(abs(log2FC) == max(abs(log2FC)), .by = c(seqnames,start,end,filename)) %>% 
@@ -84,9 +68,11 @@ union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df)
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
   dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|2_")), .by = c(seqnames,start,end)) %>% 
   select(-delta) %>% 
-  pivot_wider(names_from = filename, values_from = c(padj,log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
+  pivot_wider(names_from = filename, values_from = c(coords, intensity.Control, intensity.Treatment, padj,log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
 
-nm <- names(union_left) %>% keep(~str_detect(., "padj|log2FC"))
+#nm <- names(union_left) %>% keep(~str_detect(., "padj|log2FC"))
+nm <- names(union_left) %>% keep(~str_detect(., "MANORM|DIFFREPS|RIPPM"))
+
 # set correct order for columns: MANORM2, DIFFREPS and RIPPM
 nm <- c(nm[grepl("MANORM2",nm)] %>% sort,
   nm[grepl("DIFFREPS",nm)] %>% sort,
