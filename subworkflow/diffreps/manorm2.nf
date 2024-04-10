@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-def create_diffreps_channel(row) {
+def create_manorm2_channel(row) {
     def meta = [:]
     // 1, Hnf6_Male, Hnf6_Female, G73M03|G73M04|G76M12|G76M13, G73M01|G73M02|G76M10|G76M11, RIPPM, 1000
     meta.num               = row[0].trim()
@@ -11,7 +11,7 @@ def create_diffreps_channel(row) {
     meta.control_samples   = row[4].trim()
     meta.normalization     = row[5].trim()
     meta.window_size       = row[6].trim()
-    meta.report_name = "diffReps_${meta.treatment_name}.vs.${meta.control_name}_${meta.normalization}_${meta.window_size}"
+    meta.report_name = "MANORM2_${meta.treatment_name}.vs.${meta.control_name}_${meta.normalization}"
     meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
     return meta
 }
@@ -30,12 +30,13 @@ workflow MANORM2 {
     diffreps_config   // diffreps configuration file (MANORM normalization)
     fragments         // bed3 fragments obtained from bam files
     peaks_for_manorm2 //macs2_callpeak.out.narrow_bed
+    mm9_chrom_sizes
     
     main:
 
     input_params = diffreps_config
         .splitCsv() 
-        .map{it->create_diffreps_channel(it)}
+        .map{it->create_manorm2_channel(it)}
         .branch {
             manorm2: it.normalization =~"MANORM"
             other: true
@@ -60,13 +61,14 @@ workflow MANORM2 {
             return [meta, new_fr, new_pks]
         } | manorm2_create_profile
         
-    manorm2_diffexp(manorm2_create_profile.out.profile)
+    manorm2_diffexp(manorm2_create_profile.out.profile, mm9_chrom_sizes)
 
     manorm2_diffexp.out.manorm2_historagms.collect() | aggregate_manorm_pdf
     
     emit:
     profile = manorm2_create_profile.out.profile
     diff_table = manorm2_diffexp.out.diff_table
+    manorm2_track = manorm2_diffexp.out.bb_track
 
 }
 
@@ -105,22 +107,27 @@ process manorm2_diffexp {
 
     executor 'local'
     beforeScript 'source $HOME/.bashrc'
-    publishDir path: "${params.output_dir}/manorm2_output/${meta.num}_MANORM2_${meta.group_name}/", mode: "copy", pattern: "*.{xlsx,pdf,bed}", overwrite: true
+    publishDir path: "${params.output_dir}/manorm2_output/${output_dir}/", mode: "copy", pattern: "*.{xlsx,pdf,bed}", overwrite: true
     
     input:
     tuple val(meta), path(profile)
-
+    path(mm9_chrom_sizes)
+    
     output:
     tuple val(meta), path("*.xlsx"), emit: diff_table
     tuple val(meta), path("*.bed"), emit: bed_track
+    tuple val(meta.num),val(output_dir), path("*.bb"), emit: bb_track
+    
     path("*.pdf"), emit: manorm2_historagms
     
     
     script:
+    output_dir="${meta.num}_${meta.report_name}_${params.peakcaller}"
     output_prefix = "${meta.group_name}_MANORM2"
     
     """
     module load R
+    module load bedtools
     
     manorm2_diffexpr.R \
         --manorm2_profile ${profile} \
@@ -128,7 +135,16 @@ process manorm2_diffexp {
         --treatment_samples '${meta.treatment_samples}' \
         --control_name ${meta.control_name} \
         --treatment_name ${meta.treatment_name} \
-        --output_prefix ${output_prefix} 
+        --output_prefix ${output_prefix}
+
+    # ignore chrM,random and header
+    for bed in `find . -name "*_FILTERED*.bed"`; do
+      cat \${bed} | grep -vE "track|chrM|random" > tmp.bed
+      bedtools sort -i tmp.bed > tmp.sorted.bed
+      bedClip tmp.sorted.bed ${mm9_chrom_sizes} tmp.sorted.clipped.bed
+      bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${output_dir}.bb"
+      rm tmp*.bed
+    done
     """
 }
 

@@ -732,7 +732,8 @@ workflow {
     MANORM2(
         diffreps_config_ch,
         bam_count.out.fragments,
-        peaks_for_manorm2
+        peaks_for_manorm2,
+        mm9_chrom_sizes
     )
 
     // MANORM2.out.profile | view
@@ -746,8 +747,6 @@ workflow {
     combined_manorm2_diffreps_ch = diffreps_group_report_ch.join(manorm2_group_report_ch)
     diffreps_manorm2_overlap(combined_manorm2_diffreps_ch)
     
-    
-    
     // TRACKS (copying, generating track lines)
     // create_bigwig_files 
     sid_normfact_ch = calc_norm_factors.out.splitCsv(sep: "\t")
@@ -759,7 +758,7 @@ workflow {
     create_bigwig_files(sid_fr_norm, mm9_chrom_sizes)
 
 
-    // create track lines
+    // create track lines (sample specific)
     sid_specific_ch = create_bigwig_files.out
         .mix(macs2_callpeak.out.broad_bb)
         .mix(macs2_callpeak.out.narrow_bb)
@@ -769,10 +768,12 @@ workflow {
         .collectFile{item -> item.join(",")+'\n'}
         .combine(sample_labels_config_ch)
 
-    group_specific_ch = DIFFREPS.out.diffreps_track 
+    // create track lines (group specific)    
+    group_specific_ch = DIFFREPS.out.diffreps_track
+        .mix(MANORM2.out.manorm2_track)
         .map{it->[it[0], it[2].getName()]}
         .collectFile{item -> item.join(",")+'\n'}
-        .combine(diffreps_config_ch)
+        .combine(diffreps_config_ch) | view
 
     create_sample_specific_tracks(sid_specific_ch)
 
@@ -788,9 +789,10 @@ workflow {
     broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
     bam_files=bam_count.out.final_bam.map{it->[it[2],it[3]]}
     diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]}
+    manorm2_files=MANORM2.out.manorm2_track.map{it->it[2]}
     
     // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
-    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files).collect()
+    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, manorm2_files).collect()
     
     if (params.copy_to_server_bool){
         copy_files_to_server(track_files_to_server, track_lines)
@@ -828,20 +830,28 @@ workflow {
 
 //TODO: To avoid multiple if conditions that diffreps config exists
 // it is required to pack creating tracks to separate workflow
+// if (diffreps) {
+//     foo(input1)
+// } else {
+//     foo(input2)
+// }
+
 
 process diffreps_manorm2_overlap {
     tag "${group_name}"
     executor 'local'
-    beforeScript 'source $HOME/.bashrc'
-    echo true
+    publishDir path: "${params.output_dir}/manorm2_diffreps_overlap/", mode: "copy", pattern: "*.xlsx", overwrite: true
     
+    beforeScript 'source $HOME/.bashrc'
     input:
     tuple val(group_name), path(diffreps_reports), path(manorm2_report)
+    
     output:
-    stdout
+    tuple val(group_name), path("*.xlsx")
+
     script:
     """
     module load R
-    ls -l
+    diffreps_manorm2_overlap.R --output_prefix ${group_name}
     """
 }
