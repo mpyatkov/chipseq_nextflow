@@ -418,8 +418,8 @@ plot_histogram <- function(df, filter_by_peakcaller_overlap = F, title_extra = "
 
 title_unfiltered = str_glue("Unfiltered {TREATMENT_NAME} / {CONTROL_NAME}.\nFold Change for diffReps condition-specific sites\n",
                             "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
-                            "Marginal sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count <= {min_avg_count}\n",
-                            "Less_{log2fc_label}-fold filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
+                            "Weakes sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
+                            "Low read sites: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count < {min_avg_count}\n")
 
 hist_unfiltered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
                                   filter_by_peakcaller_overlap = F, 
@@ -427,8 +427,8 @@ hist_unfiltered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
 
 title_filtered = str_glue("{peak_caller} filtered {TREATMENT_NAME} / {CONTROL_NAME}.\nFold Change for diffReps condition-specific sites\n",
                           "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
-                          "Marginal sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count <= {min_avg_count}\n",
-                          "Less_{log2fc_label}-fold filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
+                          "Weakes sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
+                          "Low read sites: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count < {min_avg_count}\n")
 
 hist_filtered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
                                   filter_by_peakcaller_overlap = T, 
