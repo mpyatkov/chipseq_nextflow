@@ -179,7 +179,7 @@ plot_histogram <- function(df.histogram, log2fc_cutoff, title_extra = "", log2fc
 
 title_manorm2 <-  str_glue("{argv$treatment_name} / {argv$control_name}.\nFold Change for MAnorm2 condition-specific sites\n",
                           "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
-                          "Less_{log2fc_label}-fold filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
+                          "Weakest_sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
 
 
 hist.plot <- plot_histogram(df.histogram, log2fc_cutoff = log2fc_cutoff, title_extra = title_manorm2, log2fc_label = log2fc_label, arranged_colors = arranged_colors)
