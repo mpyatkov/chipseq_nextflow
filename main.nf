@@ -174,9 +174,10 @@ process macs2_callpeak {
     
     output:
     tuple val(sample_id), path("*.{narrowPeak,broadPeak}"), emit: peak
-    tuple val(sample_id), path("*narrow_MACS2_peaks.xls")                   , emit: xls
-    tuple val(sample_id), path("*narrowPeak.bed")       , emit: narrow_bed
-    tuple val(sample_id), path("*broadPeak.bed")       , emit: broad_bed
+    tuple val(sample_id), path("*narrow_MACS2_peaks.xls"), emit: xls
+    tuple val(sample_id), path("*broad_MACS2_peaks.xls"), emit: broad_xls
+    tuple val(sample_id), path("*narrowPeak.bed"), emit: narrow_bed
+    tuple val(sample_id), path("*broadPeak.bed"), emit: broad_bed
     tuple val(sample_id), path("*narrow*.bb"), emit: narrow_bb
     tuple val(sample_id), path("*broad*.bb"), emit: broad_bb
 
@@ -798,6 +799,14 @@ workflow {
         copy_files_to_server(track_files_to_server, track_lines)
     }
 
+    // calculate overlaps for all MACS2 narrow/broad peaks
+    macs2_narrow_broad_ch = macs2_callpeak.out.xls
+        .mix(macs2_callpeak.out.broad_xls)
+        .map{sid,bedfile -> bedfile}
+        .collect()
+
+    extradetailed_stats_for_macs2(macs2_narrow_broad_ch, params.sample_labels_config)
+    
     //picard
     collect_metrics(bam_count.out.final_bam)
     
@@ -853,5 +862,29 @@ process diffreps_manorm2_overlap {
     """
     module load R
     diffreps_manorm2_overlap.R --output_prefix ${group_name}
+    """
+}
+
+process extradetailed_stats_for_macs2 {
+    
+    executor "local"
+    // echo true
+    
+    beforeScript 'source $HOME/.bashrc'
+    
+    publishDir path: "${params.output_dir}/MACS2_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: false
+
+    input:
+    path(peaks)
+    path(sample_labels)
+    
+    output:
+    path("*.xlsx")
+
+    script:
+    """
+    module load R
+    detailed_macs2_peaks_overlap.R --peak_prefix "broad" --sample_labels ./sample_labels.csv
+    detailed_macs2_peaks_overlap.R --peak_prefix "narrow" --sample_labels ./sample_labels.csv
     """
 }
