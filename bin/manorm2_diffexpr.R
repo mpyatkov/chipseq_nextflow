@@ -5,6 +5,7 @@ library(tidyr)
 library(stringr)
 library(purrr)
 library(ggplot2)
+library(patchwork)
 
 library(readxl)
 library(writexl)
@@ -177,14 +178,18 @@ plot_histogram <- function(df.histogram, log2fc_cutoff, title_extra = "", log2fc
 }
 
 
-title_manorm2 <-  str_glue("{argv$treatment_name} / {argv$control_name}.\nFold Change for MAnorm2 condition-specific sites\n",
-                          "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
-                          "Weakest_sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
+title_manorm2 <-  str_glue("MANORM2 {argv$peak_caller}, Treatment: {argv$treatment_samples} Control: {argv$control_samples}",
+                           "{argv$treatment_name} / {argv$control_name}.\nFold Change for MAnorm2 condition-specific sites\n",
+                           "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
+                           "Weakest_sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
 
 
 hist.plot <- plot_histogram(df.histogram, log2fc_cutoff = log2fc_cutoff, title_extra = title_manorm2, log2fc_label = log2fc_label, arranged_colors = arranged_colors)
 #output_name_histograms <- str_glue("Histograms_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}_{normalization_caller}.pdf")
-ggsave(str_glue("{argv$output_prefix}_Histograms.pdf"), plot = hist.plot, height = 9, width = 9)
+
+#top_header <- str_glue("MANORM2 {argv$peak_caller}, Treatment: {argv$treatment_samples} Control: {argv$control_samples}")
+#hist.plot <- hist.plot + plot_annotation(title = top_header)
+ggsave(str_glue("{argv$output_prefix}_histogram.pdf"), plot = hist.plot, height = 9, width = 9)
 
 ##### CREATE BED TRACKS #####
 ucsc_fname_filtered <- str_glue("UCSC_FILTERED_track_{argv$treatment_name}_vs_{argv$control_name}_{argv$peakcaller}_MANORM2.bed")

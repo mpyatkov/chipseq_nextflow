@@ -107,7 +107,8 @@ process manorm2_diffexp {
 
     executor 'local'
     beforeScript 'source $HOME/.bashrc'
-    publishDir path: "${params.output_dir}/manorm2_output/${output_dir}/", mode: "copy", pattern: "*.{xlsx,pdf,bed}", overwrite: true
+    publishDir path: "${params.output_dir}/manorm2_output/${output_dir}/", mode: "copy", pattern: "*.{xlsx,bed}", overwrite: true
+    publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${meta.group_name}", mode: "copy", pattern: "*.pdf", overwrite: true
     
     input:
     tuple val(meta), path(profile)

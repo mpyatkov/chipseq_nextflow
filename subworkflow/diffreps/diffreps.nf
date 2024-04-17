@@ -46,7 +46,7 @@ process diffreps_summary {
     maxRetries 2
 
     
-    publishDir path: "${params.output_dir}/diffreps_output/", mode: "copy", pattern: "${output_dir}/*", overwrite: true
+    publishDir path: "${params.output_dir}/diffreps_output/${meta.group_name}/", mode: "copy", pattern: "${output_dir}/*", overwrite: true
     
     input:
     tuple val(meta), path(diffout), path(xls), path(SAMPLE_LABELS)
