@@ -849,7 +849,8 @@ workflow {
 process diffreps_manorm2_overlap {
     tag "${group_name}"
     executor 'local'
-    publishDir path: "${params.output_dir}/manorm2_diffreps_overlap/", mode: "copy", pattern: "*.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/manorm2_diffreps_overlap/full_report/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/manorm2_diffreps_overlap/top25/", mode: "copy", pattern: "*top25*.xlsx", overwrite: true
     
     beforeScript 'source $HOME/.bashrc'
     input:
