@@ -22,6 +22,12 @@ argv <- ParseArguments()
 
 #setwd("/projectnb/wax-dk/max/CTCF_Rad21_CHIPSEQ")
 
+DEBUG <- FALSE
+if (DEBUG){
+  argv$input_xlsx <- "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207_v2_H3K27ac.xlsx" ## with diffreps config
+  #argv$input_xlsx <- "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207_v3_H3K27ac.xlsx" ## without diffreps config
+}
+
 get_table <- function(path_to_file, sheet_number, marker, shift, num_cols,row_limit) {
   
   ## config to matrix for more convenient search of markers
