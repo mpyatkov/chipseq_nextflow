@@ -27,7 +27,10 @@ print(argv)
 
 DEBUG <- F
 if (DEBUG) {
-  setwd("/projectnb2/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/temp")
+  #setwd("/projectnb2/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/temp")
+  #setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/04/76d6113cdc09ab218d39c0a538f88b")
+  
+  setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/87/5ef814302fb6b401f0f58fea790349")
 }
 
 diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>%
@@ -63,12 +66,13 @@ union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df)
   as_tibble() %>% 
   filter(padj == min(padj), .by = c(seqnames,start,end,filename)) %>% 
   filter(abs(log2FC) == max(abs(log2FC)), .by = c(seqnames,start,end,filename)) %>% 
+  filter(intensity.Treatment == max(intensity.Treatment) & intensity.Control == max(intensity.Control), .by = c(seqnames,start,end,filename)) %>% 
   distinct() %>% 
   add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
   dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) %>% 
   select(-delta) %>% 
-  pivot_wider(names_from = filename, values_from = c(coords, intensity.Control, intensity.Treatment, padj,log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
+  pivot_wider(names_from = filename, values_from = c(coords, intensity.Control, intensity.Treatment, padj, log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
 
 #nm <- names(union_left) %>% keep(~str_detect(., "padj|log2FC"))
 nm <- names(union_left) %>% keep(~str_detect(., "MANORM|DIFFREPS|RIPPM"))
