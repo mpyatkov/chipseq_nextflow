@@ -35,22 +35,25 @@ module load nextflow
 
 ## split xlsx config to individual config files and put to $config_dir 
 module load R
+#set -x
 if [ -d "${config_dir}" ]; then
-    mkdir -p _tmp
+    rm -rf _tmp && mkdir -p _tmp
     echo "Extracting config files from xls to temporary dir..."
     Rscript ./bin/config_parser.R --output_dir _tmp --input_xlsx ${xlsconfig}
     for f in $(find _tmp -name "*" -type f); do
         # echo "Processing file: $f"
         fname=$(basename $f)
-        DIFF=$(diff $f ${config_dir}/$fname)
-        if [ "$DIFF" != "" ]; then
+        #DIFF="$(diff -q $f ${config_dir}/$fname)"
+        if ! cmp -s "$f" "${config_dir}/${fname}" ; then
+        #if [[ -z "$DIFF" ]]; then
             echo "Updating: $f"
-            cp $f ${config_dir}/
+            cp "$f" "${config_dir}"
         fi
     done
     rm -rf _tmp
 else
     echo "Extracting config files from xls..."
+    mkdir -p ${config_dir}
     Rscript ./bin/config_parser.R --output_dir ${config_dir} --input_xlsx ${xlsconfig}    
 fi
 module unload R
