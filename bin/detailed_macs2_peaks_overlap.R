@@ -10,7 +10,8 @@ library(argparser)
 
 DEBUG <- F
 if (DEBUG) {
-  setwd("/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/temp2/")
+  #setwd("/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/temp2/")
+  setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/b4/fe650147015c7651495cd00d324bfe")
 }
 
 ParseArguments <- function() {
@@ -54,7 +55,7 @@ xls_combined <- join_overlap_left(xls_merged,xls %>% plyranges::as_granges()) %>
   mutate(peak_id = str_replace(peak_id,"(_narrow_|_broad_)MACS2_peak_\\d+","")) %>% 
   left_join(x =., y = sample_labels, join_by(peak_id)) %>% 
   select(-peak_id) %>% 
-  rename(peak_id = desc)
+  dplyr::rename(peak_id = desc)
 
 final <- xls_combined %>% 
   filter(fold_enrichment == max(fold_enrichment) & pileup == max(pileup) & length == max(length), 
@@ -65,6 +66,7 @@ final <- xls_combined %>%
 final_presence <- final %>% 
   select(seqnames,start,end,overlap, peak_id) %>% 
   add_count(seqnames,start,end, name = "number_of_overlaps") %>% 
+  distinct() %>% 
   pivot_wider(names_from = peak_id, values_from = overlap, names_sort = T, values_fill = 0)
 
 ## column names -- group names, values - how many samples from this specific group 
@@ -104,6 +106,7 @@ final_group_extra_presence <- final_group_extra_presence %>%
 final_extra_detailed <- final %>% 
   select(-width, -strand, -overlap, -group) %>% 
   pivot_longer(c("length", "pileup", "fold_enrichment", "minus_log10_qvalue"), values_to = "param") %>% 
+  distinct() %>% 
   pivot_wider(names_from = c(peak_id, name), values_from = param, names_sort = T, values_fill = NA)
 
 ## sort columns in specific order (ordered_subcategories)
