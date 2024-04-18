@@ -178,7 +178,7 @@ plot_histogram <- function(df.histogram, log2fc_cutoff, title_extra = "", log2fc
 }
 
 
-title_manorm2 <-  str_glue("MANORM2 {argv$peak_caller}, Treatment: {argv$treatment_samples} Control: {argv$control_samples}",
+title_manorm2 <-  str_glue("MANORM2 {argv$peakcaller}\nTreatment: {argv$treatment_samples} Control: {argv$control_samples}\n",
                            "{argv$treatment_name} / {argv$control_name}.\nFold Change for MAnorm2 condition-specific sites\n",
                            "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                            "Weakest_sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
