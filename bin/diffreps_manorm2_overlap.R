@@ -62,6 +62,8 @@ merged_union <- bind_rows(diffreps_df, manorm2_df) %>%
   as_granges() %>% 
   GenomicRanges::reduce(., min.gapwidth = 0L)
 
+
+## join union and manorm/diffreps dataframes by common regions
 union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df) %>% as_granges()) %>% 
   as_tibble() %>% 
   filter(padj == min(padj), .by = c(seqnames,start,end,filename)) %>% 
@@ -71,19 +73,46 @@ union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df)
   add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
   dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) %>% 
-  select(-delta) %>% 
+  select(-delta) 
+
+## wider version of detailed data.frame
+union_left_detailed <- union_left %>% 
   pivot_wider(names_from = filename, values_from = c(coords, intensity.Control, intensity.Treatment, padj, log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
 
+
 #nm <- names(union_left) %>% keep(~str_detect(., "padj|log2FC"))
-nm <- names(union_left) %>% keep(~str_detect(., "MANORM|DIFFREPS|RIPPM"))
-
-# set correct order for columns: MANORM2, DIFFREPS and RIPPM
+## set correct order for columns: MANORM2, DIFFREPS and RIPPM
+nm <- names(union_left_detailed) %>% keep(~str_detect(., "MANORM|DIFFREPS|RIPPM"))
 nm <- c(nm[grepl("MANORM2",nm)] %>% sort,
-  nm[grepl("DIFFREPS",nm)] %>% sort,
-  nm[grepl("RIPPM",nm)] %>% sort)
+        nm[grepl("DIFFREPS",nm)] %>% sort,
+        nm[grepl("RIPPM",nm)] %>% sort)
 
-final <- union_left %>% 
-  relocate(all_of(nm), .after = last_col()) %>% 
+union_left_detailed <- union_left_detailed %>% 
+  relocate(all_of(nm), .after = last_col())
+
+
+## shows 0/1 overlaps for specific region for all MANORM/DIFFREPS methods
+union_left_presence <- union_left %>% 
+  select(seqnames,start,end,filename) %>% 
+  mutate(overlap = 1) %>% 
+  distinct() %>% 
+  pivot_wider(names_from = filename, values_from = overlap, values_fill = 0)
+
+## change order of columns
+nmp <- names(union_left_presence) %>% keep(~str_detect(., "MANORM|DIFFREPS|RIPPM"))
+nmp <- c(nmp[grepl("MANORM2",nmp)] %>% sort,
+         nmp[grepl("DIFFREPS",nmp)] %>% sort,
+         nmp[grepl("RIPPM",nmp)] %>% sort)
+union_left_presence <- union_left_presence %>% 
+  relocate(all_of(nmp),.after = last_col())
+
+## join presence(with 0/1 integers) and detailed data.frames
+union_final <- left_join(union_left_detailed, union_left_presence, join_by("seqnames","start","end")) %>% 
+  relocate(all_of(nmp), .after = n_signif_quality_overlaps)
+
+
+## add sorting columns to final table
+final <- union_final %>% 
   mutate(padj_sort = 10^-rowMeans(-log10(select(., contains("padj"))), na.rm = TRUE),
          log2fc_sort = rowMeans(select(., contains("log2FC")), na.rm = TRUE)) %>% 
   relocate(n_signif_quality_overlaps, .after = n_any_quality_overlaps) %>% 
@@ -98,6 +127,8 @@ get_range <- function(df, keyword){
     paste0(.,"2",":",.,nrow(final)+1)
 }
 
+
+## save overlap data frame to xlsx
 export_final_full <- final %>% select(-padj_sort, -log2fc_sort, -strand)
 wb <- wb_workbook()$add_worksheet("manorm2_diffreps_overlap", gridLines = TRUE)$add_data("manorm2_diffreps_overlap", export_final_full)
 get_range(export_final_full, "padj") %>% 
