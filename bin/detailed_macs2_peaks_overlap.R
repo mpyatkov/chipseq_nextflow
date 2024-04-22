@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
-remotes::install_cran("writexl", upgrade = F)
-remotes::install_cran("argparser", upgrade = F)
-remotes::install_cran("plyranges", upgrade = F)
+remotes::install_cran("writexl", upgrade = "never")
+remotes::install_cran("argparser", upgrade = "never")
+remotes::install_cran("plyranges", upgrade = "never")
 
 library(plyranges)
 library(tidyverse)
