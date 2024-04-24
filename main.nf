@@ -35,9 +35,9 @@ process bowtie2_align {
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted.bam*", overwrite: true
-    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "*.log", overwrite: true
-    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "library.txt", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted.bam*", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*.log", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "library.txt", overwrite: true
     
     input:
     tuple val(sample_id), val(r1), val(r2)
@@ -96,8 +96,8 @@ process bam_count {
 
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "*fragments*.bed*", overwrite: true
-    publishDir path: "${params.output_dir}/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*fragments*.bed*", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: true
     
     input:
     tuple val(sample_id), val(library), path(bam), path(bai)
@@ -163,7 +163,7 @@ process macs2_callpeak {
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/${sample_id}/macs2/", mode: "copy", pattern: "*.{narrowPeak,broadPeak,xls,bed}", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/macs2/", mode: "copy", pattern: "*.{narrowPeak,broadPeak,xls,bed}", overwrite: true
         
     executor 'sge'
     beforeScript 'source $HOME/.bashrc'
@@ -237,7 +237,7 @@ process fragments_union_overlap {
     memory '8 GB'
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/${sample_id}/macs2/", mode: "copy", pattern: "${sample_id}_fragments_union_coverage.bed", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/macs2/", mode: "copy", pattern: "${sample_id}_fragments_union_coverage.bed", overwrite: true
         
     input:
     tuple val(sample_id), path(fragments)
@@ -409,7 +409,7 @@ process epic2_callpeak {
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/${sample_id}/epic2/", mode: "copy", pattern: "*bed", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/epic2/", mode: "copy", pattern: "*bed", overwrite: true
         
     executor 'sge'
     beforeScript 'source $HOME/.bashrc'
@@ -498,7 +498,7 @@ process collect_metrics {
     tag "${sample_id}"
     cpus 1
     memory '16 GB'
-    publishDir path: "${params.output_dir}/${sample_id}/metrics/", mode: "copy", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/", mode: "copy", overwrite: true
 
     beforeScript 'source $HOME/.bashrc'
     
@@ -542,7 +542,7 @@ process fastqc {
     errorStrategy 'retry'
     maxRetries 3
     
-    publishDir path: "${params.output_dir}/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: true
     
     beforeScript 'source $HOME/.bashrc'
     
