@@ -72,17 +72,19 @@ process diffreps_summary {
 process aggregate_diffreps_pdf {
     tag("${group_name}")
     executor 'local'
-    publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${group_name}", mode: "copy", pattern: "${group_name}_*.pdf", overwrite: true
+    publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${group_name}", mode: "copy", pattern: "${group_name}_*Barcharts*.pdf", overwrite: true
     
     input:
     tuple val(group_name), path(hist), path(fdr), path(bar)
+
     output:
     path("${group_name}_*.pdf")
-    script:
+    tuple val(group_name), path("${group_name}_Histogram.pdf"), emit: diffreps_aggregated_histogram
     
+    script:
     """
     module load poppler
-    pdfunite $hist "${group_name}_Histogram_Barcharts_${params.peakcaller}.pdf"
+    pdfunite $hist "${group_name}_Histogram.pdf"
     pdfunite $fdr "${group_name}_FDR_Barcharts_${params.peakcaller}.pdf"
     pdfunite $bar "${group_name}_Barcharts_${params.peakcaller}.pdf"
     """
@@ -173,4 +175,5 @@ workflow DIFFREPS {
     emit:
     diffreps_track = diffreps_summary.out.diffreps_track
     full_report = diffreps_summary.out.full_report
+    aggregated_histograms_diffreps = aggregate_diffreps_pdf.out.diffreps_aggregated_histogram    
 }

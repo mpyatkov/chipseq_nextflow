@@ -63,13 +63,13 @@ workflow MANORM2 {
         
     manorm2_diffexp(manorm2_create_profile.out.profile, mm9_chrom_sizes)
 
-    manorm2_diffexp.out.manorm2_historagms.collect() | aggregate_manorm_pdf
+    // manorm2_diffexp.out.manorm2_histograms.collect() | aggregate_manorm_pdf
     
     emit:
     profile = manorm2_create_profile.out.profile
     diff_table = manorm2_diffexp.out.diff_table
     manorm2_track = manorm2_diffexp.out.bb_track
-
+    manorm2_histogram = manorm2_diffexp.out.manorm2_histograms
 }
 
 process manorm2_create_profile {
@@ -108,7 +108,7 @@ process manorm2_diffexp {
     executor 'local'
     beforeScript 'source $HOME/.bashrc'
     publishDir path: "${params.output_dir}/manorm2_output/${output_dir}/", mode: "copy", pattern: "*.{xlsx,bed}", overwrite: true
-    publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${meta.group_name}", mode: "copy", pattern: "*.pdf", overwrite: true
+    // publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${meta.group_name}", mode: "copy", pattern: "*.pdf", overwrite: true
     
     input:
     tuple val(meta), path(profile)
@@ -119,7 +119,7 @@ process manorm2_diffexp {
     tuple val(meta), path("*.bed"), emit: bed_track
     tuple val(meta.num),val(output_dir), path("*.bb"), emit: bb_track
     
-    path("*.pdf"), emit: manorm2_historagms
+    tuple val(meta), path("*.pdf"), emit: manorm2_histograms
     
     
     script:

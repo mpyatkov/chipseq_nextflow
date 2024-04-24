@@ -748,6 +748,21 @@ workflow {
     combined_manorm2_diffreps_ch = diffreps_group_report_ch.join(manorm2_group_report_ch)
     diffreps_manorm2_overlap(combined_manorm2_diffreps_ch)
     
+    //Combine aggregated diffreps histograms and manorm2 histogram
+    mn2_gr_hist_pdf = MANORM2.out.manorm2_histogram 
+        .map{meta,rest -> [meta.group_name, rest]}
+        .groupTuple()
+    
+    // dr_gr_hist_pdf = DIFFREPS.out.aggregated_histograms_diffreps 
+    //     .map{meta, rest -> [meta.group_name, rest]}
+    //     .groupTuple() 
+
+    combined_mn2_dr_pdf = DIFFREPS.out.aggregated_histograms_diffreps
+        .join(mn2_gr_hist_pdf) 
+
+    combine_mn2_dr_pdfs(combined_mn2_dr_pdf)
+
+    
     // TRACKS (copying, generating track lines)
     // create_bigwig_files 
     sid_normfact_ch = calc_norm_factors.out.splitCsv(sep: "\t")
@@ -887,5 +902,28 @@ process extradetailed_stats_for_macs2 {
     module load R
     detailed_macs2_peaks_overlap.R --peak_prefix "broad" --sample_labels ./sample_labels.csv
     detailed_macs2_peaks_overlap.R --peak_prefix "narrow" --sample_labels ./sample_labels.csv
+    """
+}
+
+process combine_mn2_dr_pdfs {
+    tag "${group_name}"
+
+    executor "local"
+    beforeScript 'source $HOME/.bashrc'
+    publishDir path: "${params.output_dir}/aggregated_histogram_pdfs/${group_name}", mode: "copy", pattern: "*.pdf", overwrite: true
+    echo true
+
+    input:
+    tuple val(group_name), path(diffreps_pdfs), path(manorm2_pdf)
+
+    output:
+    path("*.pdf")
+
+    script:
+
+    """
+    ls -l
+    module load poppler
+    pdfunite $manorm2_pdf $diffreps_pdfs "${group_name}_Histogram_Barcharts_${params.peakcaller}.pdf"
     """
 }
