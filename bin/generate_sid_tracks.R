@@ -24,7 +24,7 @@ DEBUG <- FALSE
 ## order of sample specific tracks in UCSC browser for each sample_id
 tracks_order <- tibble(order = c(1,3,2,5,4),
                        track_type = c("bw","broad","narrow","bam","epic2"),
-                       track_suffix = c("_RiPPM_norm", "_MACS2_narrow","_MACS2_broad","", "_SICER_broad"),
+                       track_suffix = c("_RiPPM_norm", "_MACS2_broad","_MACS2_narrow","", "_SICER_broad"),
                        track_ucsc_type = c("bigWig", "bigBed", "bigBed","bam", "bigBed"),
                        visibility = c("full","squish","squish","hide", "hide"),
                        autoscale = c("on", "-","-","-","-"),
