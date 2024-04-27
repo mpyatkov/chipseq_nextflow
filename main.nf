@@ -343,7 +343,8 @@ process create_sample_specific_tracks {
     tuple path(sid_tracks), path(sample_labels)//, path(files)
 
     output:
-    path("sid_tracks.txt")
+    path("sid_tracks.txt"), emit: sid_tracks
+    path("all_bigwig_group_autoscale_hub.txt"), emit: bigwig_hub
 
     script:
     data_path="${workflow.userName}/${params.dataset_label}"
@@ -355,6 +356,9 @@ process create_sample_specific_tracks {
         --sid_tracks ${sid_tracks} \
         --data_path ${data_path} \
         --output_name "sid_tracks.txt"
+
+    ## create all_bigwig_group_autoscale_hub.txt
+    convert_tohub.py ${params.dataset_label} ./bigwig_for_hub.csv
     """
 }
 
@@ -479,6 +483,7 @@ process copy_files_to_server {
     input:
     path(files)
     path(track_lines)
+    path(track_hub)
 
     // output:
     // path("*.{bw,bam,bai,bb,txt}")
@@ -489,7 +494,7 @@ process copy_files_to_server {
     """
     mkdir -p ${data_path}/TRACK_LINES
     cp ${files} ${data_path}
-    cp ${track_lines} ${data_path}/TRACK_LINES/
+    cp ${track_lines} ${track_hub} ${data_path}/TRACK_LINES/
     """
 }
 
@@ -795,7 +800,7 @@ workflow {
 
     create_diffreps_tracks(group_specific_ch)
 
-    track_lines = Channel.from(default_tracks).concat(create_diffreps_tracks.out,create_sample_specific_tracks.out)
+    track_lines = Channel.from(default_tracks).concat(create_diffreps_tracks.out,create_sample_specific_tracks.out.sid_tracks)
         .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text}
 
     // copy bb,bam,bw files to server
@@ -811,7 +816,9 @@ workflow {
     track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, manorm2_files).collect()
     
     if (params.copy_to_server_bool){
-        copy_files_to_server(track_files_to_server, track_lines)
+        copy_files_to_server(track_files_to_server,
+                             track_lines,
+                             create_sample_specific_tracks.out.bigwig_hub)
     }
 
     // calculate overlaps for all MACS2 narrow/broad peaks

@@ -32,8 +32,8 @@ tracks_order <- tibble(order = c(1,3,2,5,4),
 
 
 if(DEBUG){
-  argv$sample_labels <- "/projectnb/wax-dk/max/features/chipseq_nextflow_exp/work/60/4d3dac3c02a25ee319b53472ebada9/sample_labels.csv"
-  argv$sid_tracks <- "/projectnb/wax-dk/max/features/chipseq_nextflow_exp/work/tmp/b6/a3ce2bbbf4dc2d8c1587fc9dcabefe/collect-file.data"
+  argv$sample_labels <- "/projectnb/wax-dk/max/G223_H3K27ac/work/b4/fe650147015c7651495cd00d324bfe/sample_labels.csv"
+  argv$sid_tracks <- "/projectnb/wax-dk/max/G223_H3K27ac/work/tmp/f1/26d3a0be8f27a125faaf5908a8aa56/collect-file.data"
   argv$data_path <- "buuser/TEST1"
 }
 
@@ -72,6 +72,15 @@ get_track_line <- function(t){
   
   tibble(track = track)
 }
+
+combined_df %>% 
+  filter(track_type == "bw") %>%
+  mutate(data_path = str_glue("http://waxmanlabvm.bu.edu/{argv$data_path}/{filename}"),
+         track_name_short = tools::file_path_sans_ext(filename),
+         track_name_long = str_glue("{sample_id}_{sample_description}")) %>% 
+  select(data_path, track_name_short, track_name_long, color) %>% 
+  write_delim("bigwig_for_hub.csv", col_names = F, delim = ";")
+          
 
 sid_track_lines <- map_dfr(combined_df %>% mutate(r = row_number()) %>% group_by(r) %>% group_split(), get_track_line) 
 write_csv(sid_track_lines, argv$output_name, col_names = F, quote = "none", escape="none")
