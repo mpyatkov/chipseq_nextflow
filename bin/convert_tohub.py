@@ -24,7 +24,7 @@ visibility full
 aggregate none
 autoScale group
 showSubtrackColorOnUi on
-maxHeightPixels 64:32:8
+maxHeightPixels 128:64:8
 priority 1
 """
     return s.strip()
