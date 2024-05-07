@@ -16,9 +16,13 @@ library(MAnorm2)
 remotes::install_cran("argparser", upgrade = "never")
 library(argparser)
 
-remotes::install_cran("plyranges", upgrade = never)
-library(plyranges)
+# remotes::install_cran("plyranges", upgrade = "never")
+# library(plyranges)
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
 
+BiocManager::install("plyranges")
+library(plyranges)
 
 ParseArguments <- function() {
   p <- arg_parser('MAnorm2 processing')
