@@ -13,6 +13,7 @@ params.copy_to_server_bool=false
 params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
+params.overwrite_outputs = true
 
 // need_diffexpr = is_empty_file(params.diffreps_config.toString()) ? false : true
 
@@ -35,7 +36,7 @@ process bowtie2_align {
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted.bam*", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted.bam*", overwrite: params.overwrite_outputs 
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*.log", overwrite: true
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "library.txt", overwrite: true
     
@@ -96,8 +97,8 @@ process bam_count {
 
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*fragments*.bed*", overwrite: true
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*fragments*.bed*", overwrite: params.overwrite_outputs 
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
     
     input:
     tuple val(sample_id), val(library), path(bam), path(bai)
@@ -547,7 +548,7 @@ process fastqc {
     errorStrategy 'retry'
     maxRetries 3
     
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: true
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: params.overwrite_outputs 
     
     beforeScript 'source $HOME/.bashrc'
     
@@ -584,8 +585,8 @@ process fastqc {
 process multiqc {
 
     cpus 1
-    publishDir path: "${params.output_dir}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: true
-    publishDir path: "/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: true
+    publishDir path: "${params.output_dir}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: params.overwrite_outputs 
+    publishDir path: "/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: params.overwrite_outputs 
     
     beforeScript 'source $HOME/.bashrc'
     
