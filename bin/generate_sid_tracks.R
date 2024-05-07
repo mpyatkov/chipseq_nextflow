@@ -79,6 +79,7 @@ combined_df %>%
          track_name_short = tools::file_path_sans_ext(filename),
          track_name_long = str_glue("{sample_id}_{sample_description}")) %>% 
   select(data_path, track_name_short, track_name_long, color) %>% 
+  mutate(order = row_number()) %>% arrange(desc(order)) %>% select(-order) %>%
   write_delim("bigwig_for_hub.csv", col_names = F, delim = ";")
           
 
