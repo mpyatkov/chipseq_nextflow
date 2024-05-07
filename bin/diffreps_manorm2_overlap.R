@@ -11,7 +11,9 @@ library(writexl)
 remotes::install_cran("argparser", upgrade = "never")
 library(argparser)
 
-remotes::install_cran("plyranges", upgrade = "never")
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("plyranges")
 library(plyranges)
 
 remotes::install_cran("openxlsx2", upgrade = "never")

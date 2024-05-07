@@ -2,7 +2,11 @@
 
 remotes::install_cran("writexl", upgrade = "never")
 remotes::install_cran("argparser", upgrade = "never")
-remotes::install_cran("plyranges", upgrade = "never")
+
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("plyranges")
+library(plyranges)
 
 library(plyranges)
 library(tidyverse)
