@@ -53,6 +53,7 @@ manorm2_df <- list.files(pattern = "MANORM2") %>%
       filter(!is.na(delta)) %>%  
       mutate(filename = f %>% tools::file_path_sans_ext())
   }) %>% 
+  mutate(across(contains("delta"), as.character)) %>% 
   rename_with(~str_replace(.x, "(.*?)\\.control\\.mean", "intensity.Control")) %>% 
   rename_with(~str_replace(.x, "(.*?)\\.treatment\\.mean", "intensity.Treatment")) %>% 
   mutate(coords = as.character(str_glue("{seqnames}:{start}-{end}")))
