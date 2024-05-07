@@ -11,10 +11,10 @@ library(writexl)
 remotes::install_cran("argparser", upgrade = "never")
 library(argparser)
 
-remotes::install_cran("plyranges", upgrade = never)
+remotes::install_cran("plyranges", upgrade = "never")
 library(plyranges)
 
-remotes::install_cran("openxlsx2", upgrade = never)
+remotes::install_cran("openxlsx2", upgrade = "never")
 library(openxlsx2)
 
 ParseArguments <- function() {
