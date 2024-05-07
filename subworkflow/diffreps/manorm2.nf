@@ -109,7 +109,7 @@ process manorm2_diffexp {
     beforeScript 'source $HOME/.bashrc'
     publishDir path: "${params.output_dir}/manorm2_output/${output_dir}/", mode: "copy", pattern: "*.{xlsx,bed}", overwrite: true
     // publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${meta.group_name}", mode: "copy", pattern: "*.pdf", overwrite: true
-    
+        
     input:
     tuple val(meta), path(profile)
     path(mm9_chrom_sizes)
@@ -117,10 +117,8 @@ process manorm2_diffexp {
     output:
     tuple val(meta), path("*.xlsx"), emit: diff_table
     tuple val(meta), path("*.bed"), emit: bed_track
-    tuple val(meta.num),val(output_dir), path("*.bb"), emit: bb_track
-    
+    tuple val(meta.num),val(output_dir), path("*.bb"), optional: true, emit: bb_track
     tuple val(meta), path("*.pdf"), emit: manorm2_histograms
-    
     
     script:
     output_dir="${meta.num}_${meta.report_name}_${params.peakcaller}"
@@ -139,13 +137,16 @@ process manorm2_diffexp {
         --output_prefix ${output_prefix}
 
     # ignore chrM,random and header
-    for bed in `find . -name "*_FILTERED*.bed"`; do
-      cat \${bed} | grep -vE "track|chrM|random" > tmp.bed
-      bedtools sort -i tmp.bed > tmp.sorted.bed
-      bedClip tmp.sorted.bed ${mm9_chrom_sizes} tmp.sorted.clipped.bed
-      bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${output_dir}.bb"
-      rm tmp*.bed
-    done
+    if [[ \$(wc -l <*.bed) -ge 2 ]]; then
+        for bed in `find . -name "*_FILTERED*.bed"`; do
+          cat \${bed} | grep -vE "track|chrM|random" > tmp.bed
+          bedtools sort -i tmp.bed > tmp.sorted.bed
+          bedClip tmp.sorted.bed ${mm9_chrom_sizes} tmp.sorted.clipped.bed
+          bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${output_dir}.bb"
+          rm tmp*.bed
+        done
+    fi
+
     """
 }
 
