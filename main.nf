@@ -14,6 +14,7 @@ params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
 params.overwrite_outputs = true
+params.overwrite_outputs = false
 
 // need_diffexpr = is_empty_file(params.diffreps_config.toString()) ? false : true
 
@@ -753,7 +754,16 @@ workflow {
 
     combined_manorm2_diffreps_ch = diffreps_group_report_ch.join(manorm2_group_report_ch)
     diffreps_manorm2_overlap(combined_manorm2_diffreps_ch)
-    
+
+    // Aggregated report which contains all diffreps and manorm2 reports together
+
+    only_reports_ch  = DIFFREPS.out.full_report
+        .mix(MANORM2.out.diff_table)
+        .map{meta,rest -> rest}
+        .collect()
+        
+    diffreps_manorm2_overlap_general(only_reports_ch)
+
     //Combine aggregated diffreps histograms and manorm2 histogram
     mn2_gr_hist_pdf = MANORM2.out.manorm2_histogram 
         .map{meta,rest -> [meta.group_name, rest]}
@@ -888,6 +898,28 @@ process diffreps_manorm2_overlap {
     diffreps_manorm2_overlap.R --output_prefix ${group_name}
     """
 }
+
+//aggregate all diffreps and manorm2 reports
+process diffreps_manorm2_overlap_general {
+    tag "diffreps_manorm2_overlap_general"
+
+    executor 'local'
+    publishDir path: "${params.output_dir}/summary_manorm2_diffreps_overlap/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
+    beforeScript 'source $HOME/.bashrc'
+
+    input:
+    path(diffreps_reports)
+    
+    output:
+    path("*.xlsx")
+
+    script:
+    """
+    module load R
+    diffreps_manorm2_overlap.R --output_prefix "general"
+    """
+}
+
 
 process extradetailed_stats_for_macs2 {
     

@@ -1,20 +1,19 @@
 #!/usr/bin/env Rscript
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("plyranges", update = FALSE)
+library(plyranges)
+
+remotes::install_cran("argparser", upgrade = "never")
+library(argparser)
+
 library(readr)
 library(dplyr)
 library(tidyr)
 library(stringr)
 library(purrr)
-
 library(readxl)
 library(writexl)
-
-remotes::install_cran("argparser", upgrade = "never")
-library(argparser)
-
-if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-BiocManager::install("plyranges")
-library(plyranges)
 
 remotes::install_cran("openxlsx2", upgrade = "never")
 library(openxlsx2)
@@ -33,6 +32,8 @@ if (DEBUG) {
   #setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/04/76d6113cdc09ab218d39c0a538f88b")
   
   setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/87/5ef814302fb6b401f0f58fea790349")
+  setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/04/76d6113cdc09ab218d39c0a538f88b")
+  #setwd("/projectnb/wax-dk/max/G223_H3K27ac_COMBINED/test")
 }
 
 diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>%
@@ -51,23 +52,56 @@ manorm2_df <- list.files(pattern = "MANORM2") %>%
   map_dfr(\(f){
     readxl::read_xlsx(path = f, sheet = 1) %>%
       select(seqnames = chrom, start, end, contains("treatment.mean"), contains("control.mean"), log2FC = Mval, padj,delta) %>%
+      rename_with(~str_replace(.x, "(.*?)\\.control\\.mean", "intensity.Control")) %>%
+      rename_with(~str_replace(.x, "(.*?)\\.treatment\\.mean", "intensity.Treatment")) %>%
       #filter(padj < 0.05) %>%
       filter(!is.na(delta)) %>%  
-      mutate(filename = f %>% tools::file_path_sans_ext())
-  }) %>% 
-  mutate(across(contains("delta"), as.character)) %>% 
-  rename_with(~str_replace(.x, "(.*?)\\.control\\.mean", "intensity.Control")) %>% 
-  rename_with(~str_replace(.x, "(.*?)\\.treatment\\.mean", "intensity.Treatment")) %>% 
-  mutate(coords = as.character(str_glue("{seqnames}:{start}-{end}")))
+      mutate(filename = f %>% tools::file_path_sans_ext()) %>% 
+      mutate(across(contains("delta"), as.character)) %>% 
+      mutate(coords = as.character(str_glue("{seqnames}:{start}-{end}")))
+  }) 
+#%>% 
+  #mutate(across(contains("delta"), as.character)) %>% 
+  # rename_with(~str_replace(.x, "(.*?)\\.control\\.mean", "intensity.Control")) %>% 
+  # rename_with(~str_replace(.x, "(.*?)\\.treatment\\.mean", "intensity.Treatment")) %>% 
+  #mutate(coords = as.character(str_glue("{seqnames}:{start}-{end}")))
 
 
-merged_union <- bind_rows(diffreps_df, manorm2_df) %>% 
+## split on upregulatation/downregulation
+diffreps_df_plus <- diffreps_df %>% 
+  filter(log2FC >= 0) %>% 
+  mutate(regulation = "positive")
+
+
+diffreps_df_minus <- diffreps_df %>% 
+  filter(log2FC < 0)%>% 
+  mutate(regulation = "negative")
+
+## if there are no any sites in manorm2
+if (nrow(manorm2_df) > 0) {
+  manorm2_df_plus <- manorm2_df %>% 
+    filter(log2FC >=0) %>% 
+    mutate(regulation = "positive")
+  
+  manorm2_df_minus <- manorm2_df %>% 
+    filter(log2FC <0) %>% 
+    mutate(regulation = "negative")
+}
+
+
+## if there are no any sites in manorm2
+if (nrow(manorm2_df) > 0) {
+  df_plus <- bind_rows(diffreps_df_plus, manorm2_df_plus) 
+  df_minus <- bind_rows(diffreps_df_minus, manorm2_df_minus) 
+} else {
+  df_plus <- diffreps_df_plus
+  df_minus <- diffreps_df_minus
+}
+
+union_plus <- df_plus %>% 
   as_granges() %>% 
-  GenomicRanges::reduce(., min.gapwidth = 0L)
-
-
-## join union and manorm/diffreps dataframes by common regions
-union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df) %>% as_granges()) %>% 
+  GenomicRanges::reduce(., min.gapwidth = 0L) %>% 
+  join_overlap_left(., df_plus %>% as_granges()) %>% 
   as_tibble() %>% 
   filter(padj == min(padj), .by = c(seqnames,start,end,filename)) %>% 
   filter(abs(log2FC) == max(abs(log2FC)), .by = c(seqnames,start,end,filename)) %>% 
@@ -77,6 +111,22 @@ union_left <- join_overlap_left(merged_union, bind_rows(diffreps_df, manorm2_df)
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
   dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) %>% 
   select(-delta) 
+
+union_minus <- df_minus %>% 
+  as_granges() %>% 
+  GenomicRanges::reduce(., min.gapwidth = 0L) %>% 
+  join_overlap_left(., df_minus %>% as_granges()) %>% 
+  as_tibble() %>% 
+  filter(padj == min(padj), .by = c(seqnames,start,end,filename)) %>% 
+  filter(abs(log2FC) == max(abs(log2FC)), .by = c(seqnames,start,end,filename)) %>% 
+  filter(intensity.Treatment == max(intensity.Treatment) & intensity.Control == max(intensity.Control), .by = c(seqnames,start,end,filename)) %>% 
+  distinct() %>% 
+  add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
+  ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
+  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) %>% 
+  select(-delta) 
+
+union_left <- bind_rows(union_plus, union_minus)
 
 ## wider version of detailed data.frame
 union_left_detailed <- union_left %>% 
@@ -96,7 +146,7 @@ union_left_detailed <- union_left_detailed %>%
 
 ## shows 0/1 overlaps for specific region for all MANORM/DIFFREPS methods
 union_left_presence <- union_left %>% 
-  select(seqnames,start,end,filename) %>% 
+  select(seqnames,start,end,filename,regulation) %>% 
   mutate(overlap = 1) %>% 
   distinct() %>% 
   pivot_wider(names_from = filename, values_from = overlap, values_fill = 0)
@@ -110,7 +160,7 @@ union_left_presence <- union_left_presence %>%
   relocate(all_of(nmp),.after = last_col())
 
 ## join presence(with 0/1 integers) and detailed data.frames
-union_final <- left_join(union_left_detailed, union_left_presence, join_by("seqnames","start","end")) %>% 
+union_final <- left_join(union_left_detailed, union_left_presence, join_by("seqnames","start","end","regulation")) %>% 
   relocate(all_of(nmp), .after = n_signif_quality_overlaps)
 
 
