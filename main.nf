@@ -13,7 +13,6 @@ params.copy_to_server_bool=false
 params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
-params.overwrite_outputs = true
 params.overwrite_outputs = false
 
 // need_diffexpr = is_empty_file(params.diffreps_config.toString()) ? false : true
@@ -37,7 +36,7 @@ process bowtie2_align {
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted.bam*", overwrite: params.overwrite_outputs 
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted.bam*", overwrite: params.overwrite_outputs 
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*.log", overwrite: true
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "library.txt", overwrite: true
     
@@ -98,8 +97,8 @@ process bam_count {
 
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*fragments*.bed*", overwrite: params.overwrite_outputs 
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "*fragments*.bed*", overwrite: params.overwrite_outputs 
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
     
     input:
     tuple val(sample_id), val(library), path(bam), path(bai)
@@ -204,11 +203,11 @@ process macs2_callpeak {
 process peak_union {
 
     executor "local"
-    echo true
+    // echo true
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/peak_union/", mode: "copy", pattern: "peak_union.bed", overwrite: true
+    // publishDir path: "${params.output_dir}/peak_union/", mode: "copy", pattern: "peak_union.bed", overwrite: true
 
     input:
     path("*")
@@ -260,7 +259,7 @@ process calc_sample_stats {
     // executor "sge"
     // cpus 1
     executor 'local'
-    echo true
+    // echo true
     input:
     tuple val(sample_id), path(fragments), path(fragments_union_coverage), path(union)
     
@@ -293,7 +292,7 @@ process calc_norm_factors {
 
     executor "local"
     beforeScript 'source $HOME/.bashrc'
-    publishDir path: "${params.output_dir}/peak_union/", mode: "copy", pattern: "*.tsv", overwrite: true
+    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.tsv", overwrite: true
         
     input:
     path(sample_stats)
@@ -549,7 +548,7 @@ process fastqc {
     errorStrategy 'retry'
     maxRetries 3
     
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: params.overwrite_outputs 
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "symlink", overwrite: params.overwrite_outputs 
     
     beforeScript 'source $HOME/.bashrc'
     
@@ -586,7 +585,7 @@ process fastqc {
 process multiqc {
 
     cpus 1
-    publishDir path: "${params.output_dir}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: params.overwrite_outputs 
+    publishDir path: "${params.output_dir}/summary/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: params.overwrite_outputs 
     publishDir path: "/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: params.overwrite_outputs 
     
     beforeScript 'source $HOME/.bashrc'
@@ -805,7 +804,7 @@ workflow {
         .mix(MANORM2.out.manorm2_track)
         .map{it->[it[0], it[2].getName()]}
         .collectFile{item -> item.join(",")+'\n'}
-        .combine(diffreps_config_ch) | view
+        .combine(diffreps_config_ch) 
 
     create_sample_specific_tracks(sid_specific_ch)
 
@@ -855,7 +854,7 @@ workflow {
         collect_metrics.out.metrics.map{it -> it[1]}.collect()
     )
 
-    multiqc.out.report | view
+    multiqc.out.report 
     // read12_tester
 
     // log.info """\
@@ -882,8 +881,8 @@ workflow {
 process diffreps_manorm2_overlap {
     tag "${group_name}"
     executor 'local'
-    publishDir path: "${params.output_dir}/manorm2_diffreps_overlap/full_report/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
-    publishDir path: "${params.output_dir}/manorm2_diffreps_overlap/top25/", mode: "copy", pattern: "*top25*.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_group_reports/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_top25/", mode: "copy", pattern: "*top25*.xlsx", overwrite: true
     
     beforeScript 'source $HOME/.bashrc'
     input:
@@ -904,7 +903,7 @@ process diffreps_manorm2_overlap_general {
     tag "diffreps_manorm2_overlap_general"
 
     executor 'local'
-    publishDir path: "${params.output_dir}/summary_manorm2_diffreps_overlap/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
     beforeScript 'source $HOME/.bashrc'
 
     input:
@@ -928,7 +927,7 @@ process extradetailed_stats_for_macs2 {
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/MACS2_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: false
+    publishDir path: "${params.output_dir}/summary/MACS2_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: false
 
     input:
     path(peaks)
@@ -950,8 +949,8 @@ process combine_mn2_dr_pdfs {
 
     executor "local"
     beforeScript 'source $HOME/.bashrc'
-    publishDir path: "${params.output_dir}/aggregated_histogram_pdfs/${group_name}", mode: "copy", pattern: "*.pdf", overwrite: true
-    echo true
+    publishDir path: "${params.output_dir}/summary/Histograms/", mode: "copy", pattern: "*.pdf", overwrite: true
+    // echo true
 
     input:
     tuple val(group_name), path(diffreps_pdfs), path(manorm2_pdf)

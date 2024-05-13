@@ -150,20 +150,20 @@ process manorm2_diffexp {
     """
 }
 
-process aggregate_manorm_pdf {
-    tag("${group_name}")
-    executor 'local'
-    publishDir path: "${params.output_dir}/manorm2_output/", mode: "copy", pattern: "*.pdf", overwrite: true
+// process aggregate_manorm_pdf {
+//     tag("${group_name}")
+//     executor 'local'
+//     publishDir path: "${params.output_dir}/manorm2_output/", mode: "copy", pattern: "*.pdf", overwrite: true
     
-    input:
-    path(hist)
+//     input:
+//     path(hist)
 
-    output:
-    path("Aggregated_Manorm2_Histograms.pdf")
+//     output:
+//     path("Aggregated_Manorm2_Histograms.pdf")
 
-    script:
-    """
-    module load poppler
-    pdfunite $hist "Aggregated_Manorm2_Histograms.pdf"
-    """
-}
+//     script:
+//     """
+//     module load poppler
+//     pdfunite $hist "Aggregated_Manorm2_Histograms.pdf"
+//     """
+// }

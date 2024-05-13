@@ -72,7 +72,8 @@ process diffreps_summary {
 process aggregate_diffreps_pdf {
     tag("${group_name}")
     executor 'local'
-    publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${group_name}", mode: "copy", pattern: "${group_name}_*Barcharts*.pdf", overwrite: true
+    publishDir path: "${params.output_dir}/summary/FDR_Barcharts/", mode: "copy", pattern: "${group_name}_*FDR*.pdf", overwrite: true
+    publishDir path: "${params.output_dir}/summary/Feature_Barcharts/", mode: "copy", pattern: "${group_name}_*Feature*.pdf", overwrite: true
     
     input:
     tuple val(group_name), path(hist), path(fdr), path(bar)
@@ -86,15 +87,15 @@ process aggregate_diffreps_pdf {
     module load poppler
     pdfunite $hist "${group_name}_Histogram.pdf"
     pdfunite $fdr "${group_name}_FDR_Barcharts_${params.peakcaller}.pdf"
-    pdfunite $bar "${group_name}_Barcharts_${params.peakcaller}.pdf"
+    pdfunite $bar "${group_name}_Feature_Barcharts_${params.peakcaller}.pdf"
     """
 }
 
 process collect_diffreps_norm_factors {
 
     executor 'local'
-    publishDir path: "${params.output_dir}/diffreps_output/", mode: "copy", pattern: "*.xlsx", overwrite: true
-    echo true
+    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.xlsx", overwrite: true
+    // echo true
 
     input:
     tuple path(diffreps_output), path(sample_stats)
