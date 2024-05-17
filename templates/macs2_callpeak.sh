@@ -8,8 +8,8 @@ lib="!{lib}"
 bam="!{bam}"
 mm9_chrom_sizes="!{mm9_chrom_sizes}"
 
-macs2 callpeak -t ${bam} -f ${lib} -g mm -n "${sample_id}_narrow_MACS2" --keep-dup all --nomodel --extsize 200 --SPMR
-macs2 callpeak -t ${bam} -f ${lib} -g mm -n "${sample_id}_broad_MACS2" --keep-dup all --nomodel --extsize 200 --broad --SPMR
+macs2 callpeak -t ${bam} -f ${lib} -g mm -n "${sample_id}_narrow_MACS2" --keep-dup all --nomodel --extsize 200
+macs2 callpeak -t ${bam} -f ${lib} -g mm -n "${sample_id}_broad_MACS2" --keep-dup all --nomodel --extsize 200 --broad
 
 function peak_to_bed() {
     local input=$1
