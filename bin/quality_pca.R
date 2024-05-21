@@ -109,7 +109,10 @@ pca_df <- macs2_combined %>%
 
 res.pca <- prcomp(pca_df %>% select(-sample_id,-group),  scale = T, center = T)  
 
-pca_plot <- ggplot2::autoplot(res.pca,data = pca_df, label = F) +
+# comment this if you would like to have sample_id_group notation on PCA plot
+pca_df <- pca_df %>% rowwise() %>% mutate(sample_id = str_remove(sample_id, paste0("_",group)))
+
+pca_plot <- ggplot2::autoplot(res.pca, data = pca_df, label = F) +
   #ggtitle("")+
   geom_point(size=5, shape=21,aes(fill = group), color = "black" ) +
   # geom_label_repel(aes(label = sample_id, 
