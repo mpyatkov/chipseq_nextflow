@@ -48,7 +48,6 @@ workflow QUALITY_PCA {
 
     emit:
     input_params = quality_pca_correlation.out 
-    // test_params= input_params.diffreps
 }
 
 process quality_pca_correlation {

@@ -664,7 +664,7 @@ workflow {
     fastq_config_ch = Channel.from(params.fastq_config)
     sample_labels_config_ch = Channel.from(params.sample_labels_config)
     diffreps_config_ch = Channel.from(params.diffreps_config)
-    // sample_labels_config_ch | view
+
     // if (is_empty_file(params.diffreps_config.toString())) {
     //     println(params.diffreps_config.toString())
     //     println("File is empty")
@@ -677,10 +677,6 @@ workflow {
     // checkifempty(parse_configuration_xls.out.diffreps_config)
     // parse_configuration_xls.out.diffreps_config | view
     
-    // // fastq = Channel.fromPath( './hnf6.csv' ).splitCsv()
-    // fastq_reads_ch = parse_configuration_xls.out.fastq_config.splitCsv()
-    // fastq_reads_ch = params.fastq_config.splitCsv() | view()
-
     bowtie2_align(fastq_config_ch.splitCsv(), mm9_black_complement)
     
     bam_count(bowtie2_align.output.bam)
@@ -749,7 +745,6 @@ workflow {
         macs2_callpeak.out.xls
     )
 
-    // MANORM2.out.profile | view
     manorm2_group_report_ch = MANORM2.out.diff_table
         .map{meta, rest -> [meta.group_name, rest]}
     
@@ -850,8 +845,6 @@ workflow {
     
     fastqc(fastq_config_ch.splitCsv())
 
-    // bowtie2_align.out.log | view
-    // bam_count.out.stats | view
     multiqc(
         fastqc.out.zip.map{it -> it[1]}.collect(),
         bowtie2_align.out.log.map{it -> it[1]}.collect(),
