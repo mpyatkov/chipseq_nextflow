@@ -24,6 +24,7 @@ params.overwrite_outputs = false
 
 include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
 include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
+include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
 
 process bowtie2_align {
 
@@ -663,7 +664,7 @@ workflow {
     fastq_config_ch = Channel.from(params.fastq_config)
     sample_labels_config_ch = Channel.from(params.sample_labels_config)
     diffreps_config_ch = Channel.from(params.diffreps_config)
-    
+    // sample_labels_config_ch | view
     // if (is_empty_file(params.diffreps_config.toString())) {
     //     println(params.diffreps_config.toString())
     //     println("File is empty")
@@ -741,6 +742,11 @@ workflow {
         bam_count.out.fragments,
         peaks_for_manorm2,
         mm9_chrom_sizes
+    )
+
+    QUALITY_PCA(
+        diffreps_config_ch,
+        macs2_callpeak.out.xls
     )
 
     // MANORM2.out.profile | view
