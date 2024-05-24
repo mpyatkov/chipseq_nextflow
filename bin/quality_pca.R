@@ -75,50 +75,93 @@ if (argv$remove_chrXY) {
     filter(!str_detect(seqnames, "chrX|chrY"))
 }
 
-## normalization coefficients (min(sum(pileup))/sum(pileup_i))
-macs2_all_norm <- macs2_all %>%
-  select(sample_id, pileup) %>%
-  summarise(n = sum(pileup), .by = sample_id) %>% 
-  mutate(n = min(n)/n) %>% 
-  #print() %>%  ## show normalization factors
-  left_join(macs2_all, ., join_by(sample_id)) %>% 
-  mutate(pileup = pileup*n) %>% 
-  select(-n)
 
-
-## stats 
-stats_table <- macs2_all %>%
-  select(sample_id, pileup, group) %>%
-  add_count(sample_id, name = "n_peaks") %>% 
-  summarise(pileup_sum = sum(pileup), n_peaks = max(n_peaks), .by = c(sample_id, group)) %>% 
-  mutate(norm_fct = round(min(pileup_sum)/pileup_sum, 2),
-         sample_id = str_glue("{sample_id}_{group}")) %>% 
-  arrange(desc(group)) %>% 
-  select(-group) %>% 
-  mutate(pileup_sum = formattable::comma(pileup_sum, format = 'd'))
-
-stats_plot <- stats_table %>% 
-  ggtexttable(., rows = NULL, theme = ttheme("classic", base_size = 12)) 
-
-macs2_union <- macs2_all_norm %>% 
+## calculate union of peaks
+macs2_union <- macs2_all %>% 
   plyranges::as_granges() %>% 
   GenomicRanges::reduce(., min.gapwidth = 0L)
 
-macs2_combined <- plyranges::join_overlap_left(macs2_union, macs2_all_norm %>% plyranges::as_granges()) %>% 
+# macs2_combined <- plyranges::join_overlap_left(macs2_union, macs2_all_norm %>% plyranges::as_granges()) %>% 
+#   as_tibble() %>% 
+#   distinct() %>% 
+#   filter(pileup == max(pileup), .by = c(seqnames,start,end,sample_id)) %>% 
+#   mutate(sample_id = str_glue("{sample_id}_{group}")) %>% 
+#   add_count(seqnames, start,end, name = "number_of_samples_in_region") %>% 
+#   filter(number_of_samples_in_region > 1) 
+
+macs2_combined <- plyranges::join_overlap_left(macs2_union, macs2_all %>% plyranges::as_granges()) %>% 
   as_tibble() %>% 
-  distinct() %>% 
-  filter(pileup == max(pileup), .by = c(seqnames,start,end,sample_id)) %>% 
+  distinct() %>%
+  summarise(pileup = sum(pileup), .by = c(seqnames,start,end,sample_id,group)) %>% 
   mutate(sample_id = str_glue("{sample_id}_{group}")) %>% 
   add_count(seqnames, start,end, name = "number_of_samples_in_region") %>% 
   filter(number_of_samples_in_region > 1) 
 
+## normalization coefficients (min(sum(pileup))/sum(pileup_i))
+## calculated only for filtered and merged regions
+macs2_all_norm <- macs2_combined %>%
+  select(sample_id, pileup) %>%
+  summarise(n = sum(pileup), .by = sample_id) %>% 
+  mutate(n = min(n)/n) %>% 
+  #print() %>%  ## show normalization factors
+  left_join(macs2_combined, ., join_by(sample_id)) %>% 
+  mutate(pileup = pileup*n) %>% 
+  select(-n)
+
+## stats table
+stats_table_before <- macs2_all %>%
+  select(sample_id, pileup, group) %>%
+  add_count(sample_id, name = "n_raw_peaks") %>% 
+  summarise(pileup_sum_raw = sum(pileup), n_peaks_raw = max(n_raw_peaks), .by = c(sample_id, group)) %>% 
+  mutate(norm_fct_raw = round(min(pileup_sum_raw)/pileup_sum_raw, 2),
+         sample_id = str_glue("{sample_id}_{group}")) %>% 
+  arrange(desc(group)) %>% 
+  select(-group) 
+
+stats_table_after <- macs2_combined %>% 
+  select(sample_id, pileup, group) %>%
+  add_count(sample_id, name = "n_peaks") %>% 
+  summarise(pileup_sum = sum(pileup), n_peaks = max(n_peaks), .by = c(sample_id, group)) %>% 
+  mutate(norm_fct = round(min(pileup_sum)/pileup_sum, 2)) %>% 
+  arrange(desc(group)) %>% 
+  select(-group)
+
+res_stats_table <- left_join(stats_table_before,stats_table_after, join_by(sample_id)) %>% 
+  mutate(pileup_ratio = round(pileup_sum/pileup_sum_raw,2), 
+         n_peaks_ratio = round(n_peaks/n_peaks_raw,2)) %>% 
+  relocate(pileup_sum, .after = pileup_sum_raw) %>%
+  relocate(pileup_ratio, .after = pileup_sum) %>% 
+  relocate(n_peaks, .after = n_peaks_raw) %>%
+  relocate(n_peaks_ratio, .after = n_peaks) %>% 
+  relocate(norm_fct_raw, .after = n_peaks_ratio) %>% 
+  relocate(norm_fct, .after = norm_fct_raw)
+  
+stats_table_formatted <- res_stats_table %>%   
+  mutate(pileup_sum = formattable::comma(pileup_sum, format = 'd'),
+         pileup_sum_raw = formattable::comma(pileup_sum_raw, format = 'd'),
+         n_peaks_raw = formattable::comma(n_peaks_raw, format = 'd'),
+         n_peaks = formattable::comma(n_peaks, format = 'd')) %>% 
+  select(sample_id, 
+         `pileup sum\nraw` = pileup_sum_raw,
+         `pileup sum\nfinal` = pileup_sum,
+         `pileup\nratio` = pileup_ratio,
+         `# peaks\nraw` = n_peaks_raw,
+         `# peaks\nfinal` = n_peaks,
+         `# peaks\nratio` = n_peaks_ratio,
+         `norm fct\nraw` = norm_fct_raw,
+         `norm fct\nfinal` = norm_fct)  
+
+stats_plot <- stats_table_formatted %>% 
+  ggtexttable(., rows = NULL, theme = ttheme("classic", base_size = 11)) 
+
+  
 ## PCA
-pca_df <- macs2_combined %>% 
+pca_df <- macs2_all_norm %>% 
   pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0) %>% 
-  select(-c(1:7)) %>% 
+  select(-c(1:5)) %>% 
   t() %>% as.data.frame() %>% 
   tibble::rownames_to_column(var = "sample_id") %>% 
-  left_join(., macs2_combined %>% select(sample_id, group) %>% distinct()) %>% 
+  left_join(., macs2_all_norm %>% select(sample_id, group) %>% distinct()) %>% 
   relocate(group, .after = sample_id) 
 
 res.pca <- prcomp(pca_df %>% select(-sample_id,-group),  scale = T, center = T)  
@@ -148,7 +191,7 @@ pca_plot <- ggplot2::autoplot(res.pca, data = pca_df, label = F) +
 
 
 ## correlation
-order_sort <- macs2_combined %>% 
+order_sort <- macs2_all_norm %>% 
   select(sample_id, group) %>% 
   distinct() %>% 
   arrange(desc(group), sample_id) %>% 
@@ -156,11 +199,11 @@ order_sort <- macs2_combined %>%
   select(-group)
 
 method <- "pearson"
-cor_df <- macs2_combined %>%
+cor_df <- macs2_all_norm %>%
   left_join(., order_sort, join_by(sample_id)) %>% 
   arrange(sort_order) %>% select(-sort_order) %>% 
   pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0) %>% 
-  select(-c(1:7)) %>% 
+  select(-c(1:5)) %>% 
   cor(., method = method)
 
 # get only lower triangle of matrix
@@ -198,9 +241,10 @@ cor_plot <- ggplot(data = td_melt, aes(Var1, Var2, fill = value))+
   xlab("")+
   ylab("")
 
+
 chrXY_status <- ifelse(argv$remove_chrXY, "Without X and Y chromosomes.", "All chromosomes.")
 title <- str_glue("{argv$treatment_name} vs {argv$control_name} (Correlation and PCA plots based on pileup of the MACS2 narrow peaks)\n",
-                  "Peak union contains {formattable::comma(ncol(pca_df), format = 'd')} peaks. {chrXY_status}\n",
+                  "Peak union contains {formattable::comma(ncol(pca_df), format = 'd')} peaks after filtratraion >1 sample occupied the region. {chrXY_status}\n",
                   "Treatment samples: {argv$treatment_samples}\n",
                   "Control samples: {argv$control_samples}\n")
 
