@@ -44,10 +44,13 @@ workflow QUALITY_PCA {
                 return [group_name, tr_name[0], ctrl_name[0], tr_samples[0], ctrl_samples[0], xls]
             } 
          
-    pairs_to_compare | quality_pca_correlation 
+    pairs_to_compare | quality_pca_correlation  
+    quality_pca_correlation.out.collect() | combine_pdf
 
-    emit:
-    input_params = quality_pca_correlation.out 
+    // emit:
+    // // input_params = quality_pca_correlation.out 
+    // combined_pdf = combine_pdf.out 
+
 }
 
 process quality_pca_correlation {
@@ -56,14 +59,12 @@ process quality_pca_correlation {
     executor 'local'
 
     beforeScript 'source $HOME/.bashrc'
-    
-    publishDir path: "${params.output_dir}/quality_pca/", mode: "copy", pattern: "*.pdf", overwrite: true
 
     input:
     tuple val(group_name), val(tr_name), val(ctrl_name), val(tr_samples), val(ctrl_samples), path(xls_files)
     
     output:
-    path("*.pdf")
+    path("*.pdf"), emit: pdfs
     
     script:
     """
@@ -72,5 +73,33 @@ process quality_pca_correlation {
         --control_name $ctrl_name \
         --treatment_samples '$tr_samples'\
         --control_samples '$ctrl_samples'
+
+    quality_pca.R --treatment_name $tr_name \
+        --control_name $ctrl_name \
+        --treatment_samples '$tr_samples'\
+        --control_samples '$ctrl_samples' \
+        --remove_chrXY
+    """
+}
+
+process combine_pdf {
+    tag "${group_name}"
+
+    executor "local"
+    beforeScript 'source $HOME/.bashrc'
+    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "Summary*.pdf", overwrite: true
+
+    input:
+    path(pdfs)
+
+    output:
+    path("Summary*.pdf")
+
+    script:
+
+    """
+    module load poppler
+    all_pdfs=(\$(find . -name '*.pdf' | sort))
+    pdfunite \${all_pdfs[@]} "Summary_PCA_correlation_plots.pdf"
     """
 }

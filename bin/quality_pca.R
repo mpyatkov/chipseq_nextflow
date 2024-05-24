@@ -8,17 +8,23 @@ if (!require("BiocManager", quietly = TRUE))
 BiocManager::install("plyranges", update = F)
 library(plyranges)
 
-library(tidyverse)
+remotes::install_cran("argparser", upgrade = "never")
 library(argparser)
 
 library(ggplot2)
 remotes::install_cran("ggfortify", upgrade = "never")
 library(ggfortify)
 library(ggrepel)
+
+remotes::install_cran("formattable", upgrade = "never")
+library(formattable)
+
 library(patchwork)
 
 remotes::install_cran("ggpubr", upgrade = "never")
 library(ggpubr)
+
+library(tidyverse)
 
 ParseArguments <- function() {
   p <- arg_parser('PCA for MACS2 narrow peaks')
@@ -26,6 +32,7 @@ ParseArguments <- function() {
   p <- add_argument(p,'--control_name', default="", help="control group name")
   p <- add_argument(p,'--treatment_samples', default="", help="list of samples separated by pipe operator. ex. 'G123_M1|G123_M2' which represent treatment condition")
   p <- add_argument(p,'--control_samples', default="", help="list of samples separated by pipe operator. ex. 'G123_M1|G123_M2' which represent control condition")
+  p <- add_argument(p,'--remove_chrXY', flag = T, help="remove chromosomes X and Y from analysis")
   return(parse_args(p))
 }
 
@@ -49,6 +56,7 @@ if (DEBUG) {
   argv$control_name <- "Female_8wk_H3K27ac"
   argv$treatment_samples <- "G223_M44|G223_M45|G223_M46|G222_M09|G222_M10"
   argv$control_samples <- "G223_M47|G223_M48|G223_M49|G222_M11|G222_M12"
+  argv$remove_chrXY <- T
 }
 
 macs2_all <- map(list.files(pattern = "xls"), \(f){
@@ -61,6 +69,11 @@ macs2_all <- map(list.files(pattern = "xls"), \(f){
     select(seqnames = chr, start, end, pileup) %>% 
     mutate(group = group, sample_id = sample_id)
 }) %>% list_rbind()
+
+if (argv$remove_chrXY) {
+  macs2_all <- macs2_all %>% 
+    filter(!str_detect(seqnames, "chrX|chrY"))
+}
 
 ## normalization coefficients (min(sum(pileup))/sum(pileup_i))
 macs2_all_norm <- macs2_all %>%
@@ -81,7 +94,8 @@ stats_table <- macs2_all %>%
   mutate(norm_fct = round(min(pileup_sum)/pileup_sum, 2),
          sample_id = str_glue("{sample_id}_{group}")) %>% 
   arrange(desc(group)) %>% 
-  select(-group)
+  select(-group) %>% 
+  mutate(pileup_sum = formattable::comma(pileup_sum, format = 'd'))
 
 stats_plot <- stats_table %>% 
   ggtexttable(., rows = NULL, theme = ttheme("classic", base_size = 12)) 
@@ -184,9 +198,9 @@ cor_plot <- ggplot(data = td_melt, aes(Var1, Var2, fill = value))+
   xlab("")+
   ylab("")
 
-
+chrXY_status <- ifelse(argv$remove_chrXY, "Without X and Y chromosomes.", "All chromosomes.")
 title <- str_glue("{argv$treatment_name} vs {argv$control_name} (Correlation and PCA plots based on pileup of the MACS2 narrow peaks)\n",
-                  "Peak union contains {ncol(pca_df)} peaks\n",
+                  "Peak union contains {formattable::comma(ncol(pca_df), format = 'd')} peaks. {chrXY_status}\n",
                   "Treatment samples: {argv$treatment_samples}\n",
                   "Control samples: {argv$control_samples}\n")
 
@@ -199,7 +213,9 @@ AAACC
 final_plot <- wrap_elements(cor_plot)+wrap_elements(pca_plot)+stats_plot+
   plot_layout(design = layout)+
   plot_annotation(title = title)
-fname <- str_glue("{argv$treatment_name}_vs_{argv$control_name}_Correlation_PCA.pdf")
+
+chrXY_suffix <- ifelse(argv$remove_chrXY, "noXY", "")
+fname <- str_glue("{argv$treatment_name}_vs_{argv$control_name}_Correlation_PCA_{chrXY_suffix}.pdf")
 ggsave(fname, plot = final_plot, width = 22, height = 12)
 # fname <- str_glue("{argv$treatment_name}_vs_{argv$control_name}_Correlation_PCA.png")
 # ggsave(fname, device =ragg::agg_png(res = 400), plot = final_plot, width = 18, height = 10)
