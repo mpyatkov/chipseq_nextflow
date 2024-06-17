@@ -45,7 +45,7 @@ workflow QUALITY_PCA {
             } 
          
     pairs_to_compare | quality_pca_correlation  
-    quality_pca_correlation.out.collect() | combine_pdf
+    quality_pca_correlation.out.pdfs.collect() | combine_pdf
 
     // emit:
     // // input_params = quality_pca_correlation.out 
@@ -59,13 +59,15 @@ process quality_pca_correlation {
     executor 'local'
 
     beforeScript 'source $HOME/.bashrc'
+    publishDir path: "${params.output_dir}/summary/quality_pca_data/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
     input:
     tuple val(group_name), val(tr_name), val(ctrl_name), val(tr_samples), val(ctrl_samples), path(xls_files)
     
     output:
     path("*.pdf"), emit: pdfs
-    
+    path("*.xlsx")
+
     script:
     """
     module load R

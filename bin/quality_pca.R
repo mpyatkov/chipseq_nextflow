@@ -59,7 +59,7 @@ if (DEBUG) {
   argv$remove_chrXY <- T
 }
 
-macs2_all <- map(list.files(pattern = "xls"), \(f){
+macs2_all <- map(list.files(pattern = "xls$"), \(f){
   
   sample_id <- str_remove(basename(f), "_narrow_MACS2_peaks.xls")
   group <- case_when(str_detect(f,argv$treatment_samples) ~ argv$treatment_name,
@@ -154,7 +154,31 @@ stats_table_formatted <- res_stats_table %>%
 stats_plot <- stats_table_formatted %>% 
   ggtexttable(., rows = NULL, theme = ttheme("classic", base_size = 11)) 
 
+
+## data to export
+if (!argv$remove_chrXY){
+  raw_export <- macs2_combined %>% 
+    pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0)
+  nm <- names(raw_export) %>% keep(~str_detect(., "Male|Female"))
+  nm <- c(nm[grepl("Male",nm)] %>% sort,
+          nm[grepl("Female",nm)] %>% sort)
+  raw_export <- raw_export %>% 
+    relocate(all_of(nm), .after = last_col())
   
+  rm(nm)
+  norm_export <- macs2_all_norm %>% 
+    pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0)
+  nm <- names(norm_export) %>% keep(~str_detect(., "Male|Female"))
+  nm <- c(nm[grepl("Male",nm)] %>% sort,
+          nm[grepl("Female",nm)] %>% sort)
+  norm_export <- norm_export %>% 
+    relocate(all_of(nm), .after = last_col()) %>% 
+    mutate(across(where(is.numeric), \(x) round(x, 3)))
+  
+  writexl::write_xlsx(x = list(`Raw data` = raw_export, `Normalized data` = norm_export),
+                      path = str_glue("{argv$treatment_name}_vs_{argv$control_name}_pileup_all_chromosomes.xlsx"))
+}
+
 ## PCA
 pca_df <- macs2_all_norm %>% 
   pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0) %>% 
