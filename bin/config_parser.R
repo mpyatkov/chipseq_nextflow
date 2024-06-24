@@ -59,7 +59,7 @@ get_table <- function(path_to_file, sheet_number, marker, shift, num_cols,row_li
 
 #### MAIN
 ### config processing
-fastq <- get_table(argv$input_xlsx, sheet_number = 1, marker = "sample_id", shift = 0, num_cols = 3,row_limit = 100)
+fastq <- get_table(argv$input_xlsx, sheet_number = 1, marker = "sample_id", shift = 0, num_cols = 4,row_limit = 100)
 sample_labels <- get_table(argv$input_xlsx, sheet_number = 2, marker = "sample_id", shift = 0, num_cols = 3,row_limit = 100)
 diffreps <- get_table(argv$input_xlsx, sheet_number = 2, marker = "exp_num", shift = 0, num_cols = 5,row_limit = 50)
 groups <- get_table(argv$input_xlsx, sheet_number = 2, marker = "group_description", shift = -1, num_cols = 3,row_limit = 50)

@@ -9,11 +9,11 @@ params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
 params.output_dir="./RESULTS"
 params.peakcaller="MACS2"
 params.dataset_label="TEST1"
-params.copy_to_server_bool=false
+params.copy_to_server_bool=true
 params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
-params.overwrite_outputs = false
+params.overwrite_outputs = true
 
 // need_diffexpr = is_empty_file(params.diffreps_config.toString()) ? false : true
 
@@ -42,11 +42,11 @@ process bowtie2_align {
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "library.txt", overwrite: true
     
     input:
-    tuple val(sample_id), val(r1), val(r2)
+    tuple val(sample_id), val(downsample), val(r1), val(r2)
     file(anti_blacklist)
     
     output:
-    tuple val(sample_id), val(library), path("${sample_id}_sorted.bam"), path("${sample_id}_sorted.bam.bai"),  emit: bam
+    tuple val(sample_id), val(downsample), val(library), path("${sample_id}_sorted.bam"), path("${sample_id}_sorted.bam.bai"),  emit: bam
     tuple val(sample_id), path("*.log"), emit: log
     
     script:
@@ -102,7 +102,7 @@ process bam_count {
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
     
     input:
-    tuple val(sample_id), val(library), path(bam), path(bai)
+    tuple val(sample_id), val(downsample), val(library), path(bam), path(bai)
     
     output:
     
@@ -122,6 +122,12 @@ process bam_count {
     
     sambamba view -h -t $task.cpus -f bam -F "[XS] == null and not unmapped ${filter_bedpe}" $bam > 1.bam
     sambamba sort -n -t $task.cpus 1.bam
+
+    ## downsample if it is required
+    if [[ "${downsample}" != "NO" ]]; then
+        samtools view -b -s ${downsample} 1.sorted.bam > tmp.bam
+        mv tmp.bam 1.sorted.bam
+    fi
 
     ## extracting fragments
     ## for single-end it will be read themselfs
@@ -449,33 +455,33 @@ process epic2_callpeak {
     """
 }
 
-process read12_tester {
-    executor 'local'
-    echo true
+// process read12_tester {
+//     executor 'local'
+//     echo true
     
-    input:
-    tuple val(sample_id), val(r1), val(r2)
+//     input:
+//     tuple val(sample_id), val(r1), val(r2)
 
-    output:
-    stdout
+//     output:
+//     stdout
 
-    script:
-    library = null
-    if (r2 == "NO") {
-        library = "single-end"
-    } else {
-        library = "paired-end"
-    }
-    // println(Objects.equals(r2, new String("NA")))
-    // println(r2.class)
-    // println(na.class)
-    // println(r2)
-    // println(na)
-    """
-    #echo $r2
-    echo "library: $library"
-    """
-}
+//     script:
+//     library = null
+//     if (r2 == "NO") {
+//         library = "single-end"
+//     } else {
+//         library = "paired-end"
+//     }
+//     // println(Objects.equals(r2, new String("NA")))
+//     // println(r2.class)
+//     // println(na.class)
+//     // println(r2)
+//     // println(na)
+//     """
+//     #echo $r2
+//     echo "library: $library"
+//     """
+// }
 
 process copy_files_to_server {
     executor 'local'
@@ -555,7 +561,7 @@ process fastqc {
     
     // echo true
     input:
-    tuple val(sample_id), val(r1), val(r2)
+    tuple val(sample_id), val(downsample), val(r1), val(r2)
     
     output:
     tuple val(sample_id), path("*.html"), emit: html
@@ -926,7 +932,7 @@ process extradetailed_stats_for_macs2 {
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/summary/MACS2_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: false
+    publishDir path: "${params.output_dir}/summary/MACS2_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
     input:
     path(peaks)
