@@ -5,10 +5,9 @@ remotes::install_cran("argparser", upgrade = "never")
 
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
-BiocManager::install("plyranges")
+BiocManager::install("plyranges", update = FALSE)
 library(plyranges)
 
-library(plyranges)
 library(tidyverse)
 library(argparser)
 
@@ -42,7 +41,7 @@ sample_labels <- read_csv(sample_labels_config, col_names=T) %>%
   mutate(group=str_glue("Group_{group_id}_{group_description}\n(n={n_samples})")) %>% 
   select(-ix, -n_samples, -group_id, -group_description)
 
-xls <- map_dfr(list.files(pattern = peak_prefix), function (xls_fname){
+xls <- map_dfr(list.files(pattern = paste0(peak_prefix,".*\\.xls$")), function (xls_fname){
   # fname <- str_extract(xls_fname,"^G\\d+\\w+\\d+(?=_MACS)")
   tmp <- read_tsv(xls_fname, comment = "#", col_names = T) %>% 
     select(seqnames = chr, start, end, peak_id = name, length, pileup, fold_enrichment, minus_log10_qvalue)
@@ -71,7 +70,10 @@ final_presence <- final %>%
   select(seqnames,start,end,overlap, peak_id) %>% 
   add_count(seqnames,start,end, name = "number_of_overlaps") %>% 
   distinct() %>% 
-  pivot_wider(names_from = peak_id, values_from = overlap, names_sort = T, values_fill = 0)
+  pivot_wider(names_from = peak_id, values_from = overlap, names_sort = T, values_fill = 0) %>% 
+  rename_with(~paste0(.x, " (Overlap = 1)"), matches("^[[:digit:]]"))
+
+  rename(across(starts_with("[[:digit:]]"), ))
 
 ## column names -- group names, values - how many samples from this specific group 
 ## present in region

@@ -85,7 +85,6 @@ process quality_pca_correlation {
 }
 
 process combine_pdf {
-    tag "${group_name}"
 
     executor "local"
     beforeScript 'source $HOME/.bashrc'
