@@ -241,8 +241,8 @@ gr.ann.noblack.extra <- gr.ann.noblack.extra %>%
                            Event == "Up" & abs(log2FC) <= log2fc_cutoff & Treatment.avg > min_avg_count & padj < 0.05 ~ str_glue("3_{TREATMENT_NAME}_Weakest_sites"),
                            abs(log2FC) > log2fc_cutoff ~ "0_Low_reads_sites", # low read region ## & (Treatment.avg <= min_avg_count | Control.avg <= min_avg_count)
                            .default = NA)) %>% 
+  drop_na(delta) %>% ## dropping entries which |log2FC| < 1 and padj > 0.05
   as_granges()
-
 
 add_colors <- function(df_tmp, hist_colors) {
   
