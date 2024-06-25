@@ -73,8 +73,6 @@ final_presence <- final %>%
   pivot_wider(names_from = peak_id, values_from = overlap, names_sort = T, values_fill = 0) %>% 
   rename_with(~paste0(.x, " (Overlap = 1)"), matches("^[[:digit:]]"))
 
-  rename(across(starts_with("[[:digit:]]"), ))
-
 ## column names -- group names, values - how many samples from this specific group 
 ## present in region
 final_group_presence <- final %>%
