@@ -89,6 +89,13 @@ macs2_union <- macs2_all %>%
 #   add_count(seqnames, start,end, name = "number_of_samples_in_region") %>% 
 #   filter(number_of_samples_in_region > 1) 
 
+## Removing peaks which overlaps only by one sample
+## 1. merge all samples (union)
+## 2. calculate pileup sums by coordinates,sample_id,group
+## 3. glue sample_id and group
+## 4. calculate number of samples in region
+## 5. filter out regions which overlapped by only 1 sample
+
 macs2_combined <- plyranges::join_overlap_left(macs2_union, macs2_all %>% plyranges::as_granges()) %>% 
   as_tibble() %>% 
   distinct() %>%
@@ -151,9 +158,21 @@ stats_table_formatted <- res_stats_table %>%
          `norm fct\nraw` = norm_fct_raw,
          `norm fct\nfinal` = norm_fct)  
 
-stats_plot <- stats_table_formatted %>% 
-  ggtexttable(., rows = NULL, theme = ttheme("classic", base_size = 11)) 
+subtitle <- paste0(
+  "The statistics in the table are calculated in two different ways. The suffix ",
+  "'raw' means that the statistics are calculated for all peaks of each individual ",
+  "sample without applying any filtering. ",
+  "The 'final' suffix means that the union of all individual samples was ",
+  "calculated, and then the overlap with that union was calculated for each ",
+  "individual sample. Finally, all regions that overlapped with only one sample ",
+  "were removed from the final set."
+) %>%
+  strwrap(width = 140) %>%
+  paste(collapse = "\n")
 
+stats_plot <- stats_table_formatted %>% 
+  ggtexttable(., rows = NULL, theme = ttheme("classic", base_size = 11)) %>% 
+  tab_add_title(text = subtitle, face = "plain", size = 10)
 
 ## data to export
 if (!argv$remove_chrXY){
