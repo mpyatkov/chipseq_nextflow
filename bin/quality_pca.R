@@ -56,7 +56,7 @@ if (DEBUG) {
   argv$control_name <- "Female_8wk_H3K27ac"
   argv$treatment_samples <- "G223_M44|G223_M45|G223_M46|G222_M09|G222_M10"
   argv$control_samples <- "G223_M47|G223_M48|G223_M49|G222_M11|G222_M12"
-  argv$remove_chrXY <- T
+  argv$remove_chrXY <- F
 }
 
 macs2_all <- map(list.files(pattern = "xls$"), \(f){
@@ -158,6 +158,7 @@ stats_plot <- stats_table_formatted %>%
 ## data to export
 if (!argv$remove_chrXY){
   raw_export <- macs2_combined %>% 
+    select(-group) %>% 
     pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0)
   nm <- names(raw_export) %>% keep(~str_detect(., "Male|Female"))
   nm <- c(nm[grepl("Male",nm)] %>% sort,
@@ -167,6 +168,7 @@ if (!argv$remove_chrXY){
   
   rm(nm)
   norm_export <- macs2_all_norm %>% 
+    select(-group) %>% 
     pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0)
   nm <- names(norm_export) %>% keep(~str_detect(., "Male|Female"))
   nm <- c(nm[grepl("Male",nm)] %>% sort,
