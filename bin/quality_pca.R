@@ -162,10 +162,10 @@ subtitle <- paste0(
   "The statistics in the table are calculated in two different ways. The suffix ",
   "'raw' means that the statistics are calculated for all peaks of each individual ",
   "sample without applying any filtering. ",
-  "The 'final' suffix means that the union of all individual samples was ",
-  "calculated, and then the overlap with that union was calculated for each ",
-  "individual sample. Finally, all regions that overlapped with only one sample ",
-  "were removed from the final set."
+  "To calculate final peaks: ",
+  "Peaks are merged across all samples to obtain a peak union list ",
+  "All union peaks which overlap with a raw peak from only one sample are discarded ",
+  "to give the final peak number shown in the table"
 ) %>%
   strwrap(width = 140) %>%
   paste(collapse = "\n")
@@ -289,7 +289,7 @@ cor_plot <- ggplot(data = td_melt, aes(Var1, Var2, fill = value))+
 
 chrXY_status <- ifelse(argv$remove_chrXY, "Without X and Y chromosomes.", "All chromosomes.")
 title <- str_glue("{argv$treatment_name} vs {argv$control_name} (Correlation and PCA plots based on pileup of the MACS2 narrow peaks)\n",
-                  "Peak union contains {formattable::comma(ncol(pca_df), format = 'd')} peaks after filtratraion >1 sample occupied the region. {chrXY_status}\n",
+                  "Peak union contains {formattable::comma(ncol(pca_df), format = 'd')} peaks after filtering to remove peaks unique to one sample only. {chrXY_status}\n",
                   "Treatment samples: {argv$treatment_samples}\n",
                   "Control samples: {argv$control_samples}\n")
 
