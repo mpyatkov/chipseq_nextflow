@@ -615,16 +615,16 @@ unfiltered_xls <- gr.ann.noblack.extra %>%
   select(-cols) %>% 
   relocate(any_of(c("peakcaller_overlap","down_significant","up_significant","significant")), .after = Control.avg) %>% 
   dplyr::rename(`Overlapped with peak caller` = peakcaller_overlap, 
-                `Significant CONTROL` = down_significant, 
-                `Significant TREATMENT` = up_significant, 
-                `Significant by default thresholds` = significant) %>% 
+                `Control is greater than Treatment` = down_significant, 
+                `Treatment is greater than Control` = up_significant, 
+                `Differential is significant by default thresholds` = significant) %>% 
   select(-Control.enr, -Treatment.enr) %>% 
   mutate(ucsc_coords = str_glue("{seqnames}:{start}-{end}")) %>% 
   relocate(ucsc_coords, .before = seqnames) %>% 
   relocate(c("Overlapped with peak caller", 
-             "Significant CONTROL", 
-             "Significant TREATMENT", 
-             "Significant by default thresholds"), 
+             "Control is greater than Treatment", 
+             "Treatment is greater than Control", 
+             "Differential is significant by default thresholds"), 
            .before = seqnames) %>% 
   arrange(seqnames, start, end) 
 
@@ -633,10 +633,11 @@ sheet_name <- str_glue("Unfiltered_sites")
 wb <- createWorkbook()
 addWorksheet(wb, sheetName = sheet_name)
 writeData(wb, sheet = sheet_name, str_glue("Unfiltered sites: {TREATMENT_NAME} (treatment)/{CONTROL_NAME} (control)"), startRow = 1, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, str_glue("Default thresholds: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}"), startRow = 2, startCol = 1, colNames = FALSE)
-#writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {short_treatment_names}, CONTROL samples: {short_control_names}"), startRow = 3, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_samples}, CONTROL samples: {control_samples}"), startRow = 3, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, unfiltered_xls, startRow = 5, startCol = 1)
+writeData(wb, sheet = sheet_name, str_glue("Default thresholds (used to define only significant sites): |log2FC| > {log2fc_cutoff}, padj < 0.05, max(avg.count) > {min_avg_count}"), startRow = 2, startCol = 1, colNames = FALSE)
+writeData(wb, sheet = sheet_name, str_glue("CONTROL/TREATMENT thresholds: |log2FC| > {log2fc_cutoff}, padj < 0.05, Control.avg/Treatment.avg > {min_avg_count}"), startRow = 3, startCol = 1, colNames = FALSE)
+writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_samples}, CONTROL samples: {control_samples}"), startRow = 4, startCol = 1, colNames = FALSE)
+
+writeData(wb, sheet = sheet_name, unfiltered_xls, startRow = 6, startCol = 1)
 
 # write_xlsx(unfiltered_xls, path = "Unfiltered_sites_output.xlsx")
 
@@ -669,24 +670,25 @@ filtered_xls <- join_overlap_left(gr.ann.noblack.extra %>% filter(peakcaller_ove
   relocate(ucsc_coords, .before = seqnames) %>% 
   arrange(desc(overlap_with_n_samples), seqnames, start, end) %>% 
   dplyr::rename(`Overlapped with peak caller` = peakcaller_overlap, 
-                `Significant CONTROL` = down_significant, 
-                `Significant TREATMENT` = up_significant, 
-                `Significant by default thresholds` = significant,
+                `Control is greater than Treatment` = down_significant, 
+                `Treatment is greater than Control` = up_significant, 
+                `Differential is significant by default thresholds` = significant,
                 `How many samples overlap with this region` = overlap_with_n_samples) %>% 
   relocate(c("Overlapped with peak caller", 
-             "Significant CONTROL", 
-             "Significant TREATMENT", 
-             "Significant by default thresholds", 
+             "Control is greater than Treatment", 
+             "Treatment is greater than Control", 
+             "Differential is significant by default thresholds", 
              "How many samples overlap with this region"), 
            .before = seqnames)
 
 sheet_name <- str_glue("{peak_caller}_filtered_sites")
 addWorksheet(wb, sheetName = sheet_name)
 writeData(wb, sheet = sheet_name, str_glue("{peak_caller} filtered sites: {TREATMENT_NAME} (treatment)/{CONTROL_NAME} (control)"), startRow = 1, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, str_glue("Default thresholds: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}"), startRow = 2, startCol = 1, colNames = FALSE)
-#writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {short_treatment_names}, CONTROL samples: {short_control_names}"), startRow = 3, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_samples}, CONTROL samples: {control_samples}"), startRow = 3, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, filtered_xls, startRow = 5, startCol = 1)
+writeData(wb, sheet = sheet_name, str_glue("Default thresholds (used to define only significant sites): |log2FC| > {log2fc_cutoff}, padj < 0.05, max(avg.count) > {min_avg_count}"), startRow = 2, startCol = 1, colNames = FALSE)
+writeData(wb, sheet = sheet_name, str_glue("CONTROL/TREATMENT thresholds: |log2FC| > {log2fc_cutoff}, padj < 0.05, Control.avg/Treatment.avg > {min_avg_count}"), startRow = 3, startCol = 1, colNames = FALSE)
+writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_samples}, CONTROL samples: {control_samples}"), startRow = 4, startCol = 1, colNames = FALSE)
+
+writeData(wb, sheet = sheet_name, filtered_xls, startRow = 6, startCol = 1)
 
 # saveWorkbook(wb, str_glue("Summary_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.xlsx"), overwrite = T)
 saveWorkbook(wb, str_glue("Summary_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{normalization_caller}.xlsx"), overwrite = T)

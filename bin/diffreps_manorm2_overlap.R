@@ -38,7 +38,7 @@ if (DEBUG) {
 
 diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>%
   map_dfr(\(f){
-    readxl::read_xlsx(path = f, skip = 4, sheet = 2) %>%
+    readxl::read_xlsx(path = f, skip = 5, sheet = 2) %>%
       select(seqnames, start, end, contains("avg"),log2FC, padj,peakcaller_overlap = `Overlapped with peak caller`, delta) %>%
       filter(peakcaller_overlap == 1 & !is.na(delta) & padj < 0.05) %>%
       mutate(filename = f %>% tools::file_path_sans_ext()) %>%
