@@ -889,7 +889,7 @@ workflow {
 process diffreps_manorm2_overlap {
     tag "${group_name}"
     executor 'local'
-    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_group_reports/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_individual_reports_for_groups/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
     publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_top25/", mode: "copy", pattern: "*top25*.xlsx", overwrite: true
     
     beforeScript 'source $HOME/.bashrc'
@@ -923,7 +923,7 @@ process diffreps_manorm2_overlap_general {
     script:
     """
     module load R
-    diffreps_manorm2_overlap.R --output_prefix "general"
+    diffreps_manorm2_overlap.R --output_prefix "all_groups_together"
     """
 }
 

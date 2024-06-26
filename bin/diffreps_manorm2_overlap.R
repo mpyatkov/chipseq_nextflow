@@ -34,6 +34,7 @@ if (DEBUG) {
   setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/87/5ef814302fb6b401f0f58fea790349")
   setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/04/76d6113cdc09ab218d39c0a538f88b")
   #setwd("/projectnb/wax-dk/max/G223_H3K27ac_COMBINED/test")
+  
 }
 
 diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>%
@@ -109,8 +110,9 @@ union_plus <- df_plus %>%
   distinct() %>% 
   add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
-  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) %>% 
-  select(-delta) 
+  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) 
+# %>% 
+#   select(-delta) 
 
 union_minus <- df_minus %>% 
   as_granges() %>% 
@@ -123,13 +125,15 @@ union_minus <- df_minus %>%
   distinct() %>% 
   add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
-  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) %>% 
-  select(-delta) 
+  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) 
+# %>% 
+#   select(-delta) 
 
 union_left <- bind_rows(union_plus, union_minus)
 
 ## wider version of detailed data.frame
 union_left_detailed <- union_left %>% 
+  select(-delta) %>% 
   pivot_wider(names_from = filename, values_from = c(coords, intensity.Control, intensity.Treatment, padj, log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
 
 
@@ -146,10 +150,10 @@ union_left_detailed <- union_left_detailed %>%
 
 ## shows 0/1 overlaps for specific region for all MANORM/DIFFREPS methods
 union_left_presence <- union_left %>% 
-  select(seqnames,start,end,filename,regulation) %>% 
-  mutate(overlap = 1) %>% 
+  select(seqnames,start,end,filename,regulation, delta) %>% 
+  #mutate(overlap = 1) %>% 
   distinct() %>% 
-  pivot_wider(names_from = filename, values_from = overlap, values_fill = 0)
+  pivot_wider(names_from = filename, values_from = delta, values_fill = NA)
 
 ## change order of columns
 nmp <- names(union_left_presence) %>% keep(~str_detect(., "MANORM|DIFFREPS|RIPPM"))
