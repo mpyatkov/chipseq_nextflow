@@ -6,13 +6,20 @@ ParseArguments <- function() {
     p <- arg_parser('Parsing diffReps output')
     p <- add_argument(p,'--pattern', default="diffReps_", help="search pattern for diffReps output files")
     p <- add_argument(p, '--path', default="../", help="path to the dir which contains diffReps output directories")
-    p <- add_argument(p, '--rippm_report', default="Norm_Factors.tsv", 
-                      help="path to the file with rippm stats")
+    p <- add_argument(p, '--rippm_report', default="Norm_Factors.tsv", help="path to the file with rippm stats")
+    p <- add_argument(p, '--fastq_num_reads', default="numreads.csv", help="path to the file with rippm stats")
     p <- add_argument(p, '--output', default="Summary_normalization_factors.xlsx", help="output filename")
     return(parse_args(p))
 }
 
 argv <- ParseArguments()
+
+DEBUG <- FALSE
+if (DEBUG){
+  setwd("/projectnb/wax-dk/max/G225/work/8c/5f7bd8bcd5fb8715735449bc37389f")
+  argv$path <- "./"
+  argv$fastq_num_reads <- "/projectnb/wax-dk/max/G225/work/tmp/f6/f86064f81022d98eb2cadd37bbcaff/numreads.txt"
+}
 
 library(stringr)
 library(purrr)
@@ -23,6 +30,9 @@ library(openxlsx)
 
 rippm_report <- read_tsv(argv$rippm_report, col_names = T) %>%
              select(-norm_factor)
+
+## raw reads from from R1 files for each sample
+fastq_num_reads <- read_csv(argv$fastq_num_reads, col_names = T)
 
 files <- list.files(path = argv$path, pattern = argv$pattern, recursive = T, full.names = T) %>% 
     keep(function(x){str_detect(x,"\\.vs\\.") && str_detect(x,"annotated|hotspot", negate = T)})
@@ -70,6 +80,8 @@ tst <- map_dfr(files, function(f){
 
 l1 <- tst %>% 
   left_join(.,rippm_report, by = c("sample_id")) %>% 
+  left_join(.,fastq_num_reads, join_by(sample_id)) %>% 
+  relocate(num_raw_reads, .before = fragment_count) %>% 
   mutate(window = str_glue("{norm_caller}_{window}"),
          sample_id = str_glue("{sample_id}_{group}"),
          group = str_glue("{condition}_{group}")) %>% 
@@ -79,10 +91,10 @@ l1 <- tst %>%
 
 lgroup_to_ltables <- function(df) {
   
-    rippm_table <- df %>% select(sample_id, starts_with("fragment")) %>% distinct()
+    rippm_table <- df %>% select(sample_id, starts_with("num_raw"), starts_with("fragment")) %>% distinct()
 
     norm_factors_table <- df %>% 
-      select(-starts_with("fragment")) %>% 
+      select(-starts_with("fragment"), -starts_with("num_raw_reads")) %>% 
       pivot_wider(names_from = window, values_from = normfactors)
 
     fname <- norm_factors_table %>% select(fname) %>% distinct() %>% pull(fname) %>% 

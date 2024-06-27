@@ -98,7 +98,7 @@ process collect_diffreps_norm_factors {
     // echo true
 
     input:
-    tuple path(diffreps_output), path(sample_stats)
+    tuple path(diffreps_output), path(sample_stats), path(fq_num_reads)
     output:
     path("*.xlsx")
 
@@ -106,7 +106,8 @@ process collect_diffreps_norm_factors {
     """
     module load R
     diffreps_output_parser.R --path "." \
-        --rippm_report ${sample_stats}
+        --rippm_report ${sample_stats} \
+        --fastq_num_reads ${fq_num_reads}
     """
 }
 
@@ -118,6 +119,7 @@ workflow DIFFREPS {
     norm_factors         //calc_norm_factors.out
     peakcaller_xls       //macs2_callpeak.out.xls
     mm9_chrom_sizes      //mm9_chrom_sizes
+    fq_num_reads         //table with number of reads in R1.fq files for each sample 
 
     main:
 
@@ -171,7 +173,8 @@ workflow DIFFREPS {
     diffreps_summary.out.diffreps_output
         .collect()
         .toList()
-        .combine(norm_factors) | collect_diffreps_norm_factors
+        .combine(norm_factors) 
+        .combine(fq_num_reads) | collect_diffreps_norm_factors
     
     emit:
     diffreps_track = diffreps_summary.out.diffreps_track
