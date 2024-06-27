@@ -131,6 +131,7 @@ union_minus <- df_minus %>%
 
 union_left <- bind_rows(union_plus, union_minus)
 
+
 ## wider version of detailed data.frame
 union_left_detailed <- union_left %>% 
   select(-delta) %>% 
@@ -175,6 +176,19 @@ final <- union_final %>%
   relocate(n_signif_quality_overlaps, .after = n_any_quality_overlaps) %>% 
   arrange(desc(n_any_quality_overlaps), desc(n_signif_quality_overlaps),padj_sort, desc(abs(log2fc_sort))) %>% 
   mutate(across(contains("log2FC"), ~round(.x, digits = 2)))
+
+
+
+## TOP log2FC and padj (padj -> log2fc for this padj) (ADD TO FINAL TABLE)
+top_log2fc_padj <- union_left %>% 
+  select(seqnames, start, end, log2FC, padj) %>% 
+  mutate(best_padj = min(padj), .by = c(seqnames, start, end)) %>% 
+  filter(padj == best_padj) %>% 
+  mutate(log2FC = round(log2FC, digits = 2)) %>% 
+  select(seqnames, start, end, `Top padj` = padj, `log2FC related to top padj` = log2FC)
+
+final <- left_join(final, top_log2fc_padj, join_by(seqnames,start,end)) %>% 
+  relocate(all_of(c('Top padj','log2FC related to top padj')), .after = n_signif_quality_overlaps)
 
 ## generate excel format (ex. C1:C1234, E1:E1234) ranges for "keyword" columns
 ## need to add scientific output format for specific columns (openxlsx2 package)
