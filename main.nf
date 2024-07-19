@@ -6,9 +6,9 @@ mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", chec
 default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
 
 params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
-params.output_dir="./RESULTS"
-params.peakcaller="MACS2"
-params.dataset_label="TEST1"
+params.peakcaller="MACS2"    // by default going to use MACS2 (SICER/EPIC2 alternative)
+params.dataset_label="TEST1" // default dataset label if not provided
+params.output_dir="./RESULTS_${params.dataset_label}"
 params.copy_to_server_bool=true
 params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
@@ -547,6 +547,28 @@ process collect_metrics {
     """
 }
 
+process fastq_num_reads {
+    tag "${sample_id}"
+    cpus 1
+    time '1h'
+
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: params.overwrite_outputs 
+
+    input:
+    tuple val(sample_id), val(downsample), val(r1), val(r2)
+
+    output:
+    tuple val(sample_id), path("*_raw_reads.txt") , emit: raw_reads
+
+    script:
+    """
+    ## calculate number of raw reads
+    NUMREADS=`echo \$(zcat $r1 | wc -l)/4 | bc`
+    echo "sample_id,num_raw_reads" >> ${sample_id}_raw_reads.txt
+    echo "${sample_id},\${NUMREADS}" >> ${sample_id}_raw_reads.txt
+    """
+}
+
 process fastqc {
     tag "${sample_id}"
     cpus 4
@@ -682,6 +704,15 @@ workflow {
     // parse_configuration_xls.out.fastq_config.splitCsv() | read12_tester
     // checkifempty(parse_configuration_xls.out.diffreps_config)
     // parse_configuration_xls.out.diffreps_config | view
+
+    // Make QC analysis first
+    fastqc(fastq_config_ch.splitCsv())
+    // Calculate number of reads in fastq files 
+    // (required for downstream report)
+    fastq_num_reads(fastq_config_ch.splitCsv())
+    fq_num_reads = fastq_num_reads.out.raw_reads  
+        .map{it -> it[1]}
+        .collectFile(name: "numreads.csv", keepHeader: true)
     
     bowtie2_align(fastq_config_ch.splitCsv(), mm9_black_complement)
     
@@ -736,7 +767,8 @@ workflow {
         bam_count.out.fragments_bed6,
         calc_norm_factors.out,
         extra_columns, //macs2_callpeak.out.xls
-        mm9_chrom_sizes
+        mm9_chrom_sizes,
+        fq_num_reads // table with number of reads in R1.fq files for each sample
     )
 
     MANORM2(
@@ -852,8 +884,6 @@ workflow {
     //picard
     collect_metrics(bam_count.out.final_bam)
     
-    fastqc(fastq_config_ch.splitCsv())
-
     multiqc(
         fastqc.out.zip.map{it -> it[1]}.collect(),
         bowtie2_align.out.log.map{it -> it[1]}.collect(),
