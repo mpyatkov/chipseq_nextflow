@@ -1,10 +1,10 @@
 #!/usr/bin/env Rscript
-if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-BiocManager::install("plyranges", update = FALSE)
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("plyranges", update = FALSE)
 library(plyranges)
 
-remotes::install_cran("argparser", upgrade = "never")
+# remotes::install_cran("argparser", upgrade = "never")
 library(argparser)
 
 library(readr)
@@ -15,7 +15,7 @@ library(purrr)
 library(readxl)
 library(writexl)
 
-remotes::install_cran("openxlsx2", upgrade = "never")
+# remotes::install_cran("openxlsx2", upgrade = "never")
 library(openxlsx2)
 
 ParseArguments <- function() {

@@ -125,7 +125,7 @@ process manorm2_diffexp {
     output_prefix = "${meta.group_name}_MANORM2"
     
     """
-    module load R
+    module load R/${params.rversion}
     module load bedtools
     
     manorm2_diffexpr.R \

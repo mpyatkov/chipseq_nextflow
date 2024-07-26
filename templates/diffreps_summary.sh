@@ -24,7 +24,7 @@ else
     mv *.bed ./XLSfiles
 fi
 
-module load R
+module load R/"!{params.rversion}"
 module load bedtools
 
 (set -x; diffreps_genomicRanges.R \

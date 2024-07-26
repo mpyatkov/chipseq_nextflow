@@ -8,8 +8,9 @@ default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: t
 params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
 params.peakcaller="MACS2"    // by default going to use MACS2 (SICER/EPIC2 alternative)
 params.dataset_label="TEST1" // default dataset label if not provided
+params.rversion="4.2"
 params.output_dir="./RESULTS_${params.dataset_label}"
-params.copy_to_server_bool=true
+params.copy_to_server_bool=false
 params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
@@ -309,7 +310,7 @@ process calc_norm_factors {
     
     script:
     """
-    module load R
+    module load R/${params.rversion}
     calculate_norm_factors.R ${sample_stats} "Norm_Factors.tsv"
     """
 }
@@ -358,7 +359,7 @@ process create_sample_specific_tracks {
     data_path="${workflow.userName}/${params.dataset_label}"
     
     """
-    module load R
+    module load R/${params.rversion}
     generate_sid_tracks.R \
         --sample_labels ${sample_labels} \
         --sid_tracks ${sid_tracks} \
@@ -383,7 +384,7 @@ process create_diffreps_tracks {
     data_path="${workflow.userName}/${params.dataset_label}"
     
     """
-    module load R
+    module load R/${params.rversion}
     generate_diffreps_tracks.R \
         --diffreps_config ${diffreps_config} \
         --diffreps_tracks ${diffreps_tracks} \
@@ -405,7 +406,7 @@ process create_diffreps_tracks {
 
 //     script:
 //     """
-//     module load R
+//     module load R/${params.rversion}
 //     config_parser.R --input_xlsx ${xlsx}
 //     """
 // }
@@ -526,7 +527,7 @@ process collect_metrics {
     script:
     """
     module load picard
-    module load R
+    module load R/${params.rversion}
 
     # set -x
     
@@ -931,7 +932,7 @@ process diffreps_manorm2_overlap {
 
     script:
     """
-    module load R
+    module load R/${params.rversion}
     diffreps_manorm2_overlap.R --output_prefix ${group_name}
     """
 }
@@ -940,7 +941,11 @@ process diffreps_manorm2_overlap {
 process diffreps_manorm2_overlap_general {
     tag "diffreps_manorm2_overlap_general"
 
-    executor 'local'
+    executor 'sge'
+    cpus 4
+    memory '32 GB'
+    time '1h'
+    // executor 'local'
     publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
     beforeScript 'source $HOME/.bashrc'
 
@@ -952,7 +957,7 @@ process diffreps_manorm2_overlap_general {
 
     script:
     """
-    module load R
+    module load R/${params.rversion}
     diffreps_manorm2_overlap.R --output_prefix "all_groups_together"
     """
 }
@@ -976,7 +981,7 @@ process extradetailed_stats_for_macs2 {
 
     script:
     """
-    module load R
+    module load R/${params.rversion}
     detailed_macs2_peaks_overlap.R --peak_prefix "broad" --sample_labels ./sample_labels.csv
     detailed_macs2_peaks_overlap.R --peak_prefix "narrow" --sample_labels ./sample_labels.csv
     """

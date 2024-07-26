@@ -10,16 +10,16 @@ library(patchwork)
 library(readxl)
 library(writexl)
 
-remotes::install_cran("MAnorm2", upgrade = "never")
+# remotes::install_cran("MAnorm2", upgrade = "never")
 library(MAnorm2)
 
-remotes::install_cran("argparser", upgrade = "never")
+# remotes::install_cran("argparser", upgrade = "never")
 library(argparser)
 
 # remotes::install_cran("plyranges", upgrade = "never")
 # library(plyranges)
-if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
 
 BiocManager::install("plyranges")
 library(plyranges)

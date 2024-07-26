@@ -70,7 +70,7 @@ process quality_pca_correlation {
 
     script:
     """
-    module load R
+    module load R/${params.rversion}
     quality_pca.R --treatment_name $tr_name \
         --control_name $ctrl_name \
         --treatment_samples '$tr_samples'\

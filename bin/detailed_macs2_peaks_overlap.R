@@ -1,11 +1,11 @@
 #!/usr/bin/env Rscript
 
-remotes::install_cran("writexl", upgrade = "never")
-remotes::install_cran("argparser", upgrade = "never")
+# remotes::install_cran("writexl", upgrade = "never")
+# remotes::install_cran("argparser", upgrade = "never")
 
-if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-BiocManager::install("plyranges", update = FALSE)
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("plyranges", update = FALSE)
 library(plyranges)
 
 library(tidyverse)

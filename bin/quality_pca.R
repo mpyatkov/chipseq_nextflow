@@ -1,27 +1,27 @@
 #!/usr/bin/env Rscript
 
 #remotes::install_cran("writexl", upgrade = "never")
-remotes::install_cran("argparser", upgrade = "never")
+# remotes::install_cran("argparser", upgrade = "never")
 
-if (!require("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
-BiocManager::install("plyranges", update = F)
+# if (!require("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# BiocManager::install("plyranges", update = F)
 library(plyranges)
 
-remotes::install_cran("argparser", upgrade = "never")
+# remotes::install_cran("argparser", upgrade = "never")
 library(argparser)
 
 library(ggplot2)
-remotes::install_cran("ggfortify", upgrade = "never")
+# remotes::install_cran("ggfortify", upgrade = "never")
 library(ggfortify)
 library(ggrepel)
 
-remotes::install_cran("formattable", upgrade = "never")
+# remotes::install_cran("formattable", upgrade = "never")
 library(formattable)
 
 library(patchwork)
 
-remotes::install_cran("ggpubr", upgrade = "never")
+# remotes::install_cran("ggpubr", upgrade = "never")
 library(ggpubr)
 
 library(tidyverse)
@@ -305,7 +305,7 @@ final_plot <- wrap_elements(cor_plot)+wrap_elements(pca_plot)+stats_plot+
 
 chrXY_suffix <- ifelse(argv$remove_chrXY, "noXY", "")
 fname <- str_glue("{argv$treatment_name}_vs_{argv$control_name}_Correlation_PCA_{chrXY_suffix}.pdf")
-ggsave(fname, plot = final_plot, width = 22, height = 12)
+ggsave(fname, plot = final_plot, width = 22, height = 14)
 # fname <- str_glue("{argv$treatment_name}_vs_{argv$control_name}_Correlation_PCA.png")
 # ggsave(fname, device =ragg::agg_png(res = 400), plot = final_plot, width = 18, height = 10)
  

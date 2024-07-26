@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -eu
+RVERSION=4.2
 xlsconfig=$1
 
 # G222_G207_H3K27ac
@@ -31,12 +32,23 @@ if [[ ${ready} == 0 ]]; then
     exit 0
 fi
 
-module load nextflow
+# We need to preinstall packages before first run.
+# If "work" directory does not exist we suppose that this is first run
+if [ ! -d "work" ]; then
+    # ./install_packages.sh ${RVERSION}
+    # version=${1:-4.4}
+
+    module load R/${RVERSION}
+    export R_LIBS="${HOME}/R/x86_64-pc-linux-gnu-library/${RVERSION}"
+    mkdir -p ${R_LIBS}
+
+    Rscript bin/install_packages.R
+fi
 
 ## split xlsx config to individual config files and put to $config_dir 
-module load R
-#set -x
 if [ -d "${config_dir}" ]; then
+    module load R/${RVERSION}
+
     rm -rf _tmp && mkdir -p _tmp
     echo "Extracting config files from xls to temporary dir..."
     Rscript ./bin/config_parser.R --output_dir _tmp --input_xlsx ${xlsconfig}
@@ -56,7 +68,9 @@ else
     mkdir -p ${config_dir}
     Rscript ./bin/config_parser.R --output_dir ${config_dir} --input_xlsx ${xlsconfig}    
 fi
+
 module unload R
 
-NXF_OPTS='-Xms500M -Xmx2G' nextflow run main.nf --input_configs ${config_dir} --dataset_label ${dataset_label} -resume
+module load nextflow
+NXF_OPTS='-Xms500M -Xmx2G' nextflow run main.nf --input_configs ${config_dir} --dataset_label ${dataset_label} --rversion ${RVERSION} -resume
 

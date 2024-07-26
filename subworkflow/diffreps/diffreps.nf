@@ -104,7 +104,7 @@ process collect_diffreps_norm_factors {
 
     script:
     """
-    module load R
+    module load R/${params.rversion}
     diffreps_output_parser.R --path "." \
         --rippm_report ${sample_stats} \
         --fastq_num_reads ${fq_num_reads}
