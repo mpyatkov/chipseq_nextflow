@@ -448,8 +448,14 @@ process epic2_callpeak {
     module load epic2
     module load bedtools
     epic2 --output "${sample_id}_epic_bed6.bed" -egf ${effective_genome_fraction} -cs ${mm9_chrom_sizes} -t ${fragments} -e ${e_value} -fs ${fragment_size} -bin ${window_size} -g 6
-    awk 'OFS="\t" {print \$1,\$2,\$3}' "${sample_id}_epic_bed6.bed" > "${sample_id}_epic_bed3.bed"
     
+    ## removing header
+    sed -i '1d' "${sample_id}_epic_bed6.bed" 
+
+    ## convert to bed3
+    awk 'OFS="\t" {print \$1,\$2,\$3}' "${sample_id}_epic_bed6.bed" > "${sample_id}_epic_bed3.bed"
+
+    ## filtering out junk and creating bigbed track
     cat "${sample_id}_epic_bed3.bed" | grep -vE "track|chrM|random" > tmp.bed
     bedtools sort -i tmp.bed > tmp.sorted.bed
     bedToBigBed -allow1bpOverlap tmp.sorted.bed ${mm9_chrom_sizes} "${sample_id}_epic2.bb"

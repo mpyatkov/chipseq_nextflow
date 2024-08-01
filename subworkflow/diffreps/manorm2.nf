@@ -91,7 +91,7 @@ process manorm2_create_profile {
     module load miniconda
     conda activate /projectnb/wax-es/routines/condaenv/manorm2_utils
 
-    peaks=`find . -name "*narrow*" | sort |xargs -n1 basename | paste -s -d ","`
+    peaks=`find . -name "*narrow*" -o -name "*epic*" | sort |xargs -n1 basename | paste -s -d ","`
     reads=`find . -name "*fragments.bed" | sort | xargs -n1 basename| paste -s -d ","`
     names=`find . -name "*fragments.bed" | sort | xargs -n1 basename | replace '_fragments.bed' '' | paste -s -d ","`
 
