@@ -436,7 +436,7 @@ hist_filtered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
 
 histograms <- hist_unfiltered + hist_filtered+plot_annotation(title = top_header)
 #output_name_histograms <- str_glue("Histograms_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.pdf")
-output_name_histograms <- str_glue("Histograms_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}_{normalization_caller}.pdf")
+output_name_histograms <- str_glue("Histograms_{normalization_caller}_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}.pdf")
 ggsave(output_name_histograms, plot = histograms, height = 9, width = 18)
 
 #### barplot by features

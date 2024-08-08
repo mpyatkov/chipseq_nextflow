@@ -85,9 +85,17 @@ process aggregate_diffreps_pdf {
     script:
     """
     module load poppler
-    pdfunite $hist "${group_name}_Histogram.pdf"
-    pdfunite $fdr "${group_name}_FDR_Barcharts_${params.peakcaller}.pdf"
-    pdfunite $bar "${group_name}_Feature_Barcharts_${params.peakcaller}.pdf"
+    hist_pdfs=(\$(find . -name '*Histograms*.pdf' | sort))
+    pdfunite \${hist_pdfs[@]} "${group_name}_Histogram.pdf"
+    ## pdfunite $hist "${group_name}_Histogram.pdf"
+
+    fdr_pdfs=(\$(find . -name '*FDR*.pdf' | sort))
+    pdfunite \${fdr_pdfs[@]} "${group_name}_FDR_Barcharts_${params.peakcaller}.pdf"
+    ## pdfunite $fdr "${group_name}_FDR_Barcharts_${params.peakcaller}.pdf"
+
+    features_pdfs=(\$(find . -name 'Barchart_*.pdf' | sort))
+    pdfunite \${features_pdfs[@]} "${group_name}_Feature_Barcharts_${params.peakcaller}.pdf"
+    ## pdfunite $bar "${group_name}_Feature_Barcharts_${params.peakcaller}.pdf"
     """
 }
 

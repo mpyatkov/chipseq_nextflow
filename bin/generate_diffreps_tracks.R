@@ -25,7 +25,7 @@ library(dplyr)
 library(stringr)
 library(readr)
 library(purrr)
-
+library(tidyr)
 
 diffreps_config <- read_csv(argv$diffreps_config, col_names = F) %>% 
   select(exp_num = 1, tr_name = 2, ctrl_name = 3, tr_samples = 4, ctrl_samples = 5, normalization = 6, window_size = 7)
@@ -33,7 +33,8 @@ diffreps_config <- read_csv(argv$diffreps_config, col_names = F) %>%
 diffreps_tracks <- read_csv(argv$diffreps_tracks, col_names = F) %>% 
   select(exp_num = 1, filename = 2)
 
-combined <- left_join(diffreps_config, diffreps_tracks)  
+combined <- left_join(diffreps_config, diffreps_tracks) %>%
+  drop_na()
 
 # uncomment code below if the order in the configuration file is random, this allows the
 # tracks to be sorted so that the MANORM track for each group is followed by the
