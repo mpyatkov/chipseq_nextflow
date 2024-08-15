@@ -15,7 +15,7 @@ params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
 params.overwrite_outputs = true
-
+params.trim_adapters = true
 // need_diffexpr = is_empty_file(params.diffreps_config.toString()) ? false : true
 
 // println(params.input_configs)
@@ -26,6 +26,29 @@ params.overwrite_outputs = true
 include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
 include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
+
+process trim_adapters_paired {
+    tag "${sample_id}"
+
+    cpus 8
+    memory '8 GB'
+
+    beforeScript 'source $HOME/.bashrc'
+
+    input:
+    tuple val(sample_id), val(downsample), val(r1), val(r2)
+
+    output:
+    tuple val(sample_id), val(downsample), path("${sample_id}_val_1.fq.gz"), path("${sample_id}_val_2.fq.gz")
+
+    script:
+    """
+    module load trimgalore
+    module load cutadapt
+
+    trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 --nextera -j 4 --basename ${sample_id} 
+    """
+}
 
 process bowtie2_align {
 
@@ -712,16 +735,25 @@ workflow {
     // checkifempty(parse_configuration_xls.out.diffreps_config)
     // parse_configuration_xls.out.diffreps_config | view
 
-    // Make QC analysis first
-    fastqc(fastq_config_ch.splitCsv())
+    // trim illumina adapters
+    if (params.trim_adapters) {
+        fastq_config_ch = trim_adapters_paired(fastq_config_ch.splitCsv())
+    } else {
+        fastq_config_ch = fastq_config_ch.splitCsv()
+    }    
+    
+    // Make QC analysis 
+    fastqc(fastq_config_ch)
+
     // Calculate number of reads in fastq files 
     // (required for downstream report)
-    fastq_num_reads(fastq_config_ch.splitCsv())
+    fastq_num_reads(fastq_config_ch)
+
     fq_num_reads = fastq_num_reads.out.raw_reads  
         .map{it -> it[1]}
         .collectFile(name: "numreads.csv", keepHeader: true)
     
-    bowtie2_align(fastq_config_ch.splitCsv(), mm9_black_complement)
+    bowtie2_align(fastq_config_ch, mm9_black_complement)
     
     bam_count(bowtie2_align.output.bam)
     
