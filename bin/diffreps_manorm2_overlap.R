@@ -33,6 +33,7 @@ if (DEBUG) {
   
   setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/87/5ef814302fb6b401f0f58fea790349")
   setwd("/projectnb/wax-dk/max/G223_H3K27ac/work/04/76d6113cdc09ab218d39c0a538f88b")
+  setwd("/projectnb/wax-dk/max/G229_G207_k27me3_k9me3/work/e9/b4f0cb7a083f4e9bf2234e8fbec035")
   #setwd("/projectnb/wax-dk/max/G223_H3K27ac_COMBINED/test")
   
 }
@@ -129,14 +130,15 @@ union_minus <- df_minus %>%
 # %>% 
 #   select(-delta) 
 
-union_left <- bind_rows(union_plus, union_minus)
-
+union_left <- bind_rows(union_plus, union_minus) %>% 
+  ## removing duplicated rows which contains only different coordinates
+  distinct(seqnames,start,end,width,strand,regulation,n_any_quality_overlaps,
+           n_signif_quality_overlaps, filename, .keep_all = T)
 
 ## wider version of detailed data.frame
 union_left_detailed <- union_left %>% 
   select(-delta) %>% 
   pivot_wider(names_from = filename, values_from = c(coords, intensity.Control, intensity.Treatment, padj, log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
-
 
 #nm <- names(union_left) %>% keep(~str_detect(., "padj|log2FC"))
 ## set correct order for columns: MANORM2, DIFFREPS and RIPPM
