@@ -7,6 +7,10 @@ xlsconfig=$1
 # G222_G207_H3K27ac
 dataset_label=${2:-$(pwd | xargs basename)}
 config_dir="raw_configs"
+output_dir="RESULTS_${dataset_label}"
+
+echo "Copying xls config to output directory"
+mkdir -p ${output_dir} && cp ${xlsconfig} ${output_dir}
 
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
@@ -71,6 +75,8 @@ fi
 
 module unload R
 
+
 module load nextflow
-NXF_OPTS='-Xms500M -Xmx2G' nextflow run main.nf --input_configs ${config_dir} --dataset_label ${dataset_label} --rversion ${RVERSION} -resume
+NXF_OPTS='-Xms500M -Xmx2G' nextflow run main.nf --input_configs ${config_dir} --dataset_label ${dataset_label} --output_dir ${output_dir} --rversion ${RVERSION} -resume
+
 
