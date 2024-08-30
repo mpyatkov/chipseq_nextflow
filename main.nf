@@ -486,7 +486,8 @@ process epic2_callpeak {
     ## filtering out junk and creating bigbed track
     cat "${sample_id}_epic_bed3.bed" | grep -vE "track|chrM|random" > tmp.bed
     bedtools sort -i tmp.bed > tmp.sorted.bed
-    bedToBigBed -allow1bpOverlap tmp.sorted.bed ${mm9_chrom_sizes} "${sample_id}_epic2.bb"
+    bedClip tmp.sorted.bed ${mm9_chrom_sizes} tmp.sorted.clipped.bed
+    bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${sample_id}_epic2.bb"
     """
 }
 
