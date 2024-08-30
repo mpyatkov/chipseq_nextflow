@@ -46,7 +46,12 @@ process trim_adapters_paired {
     module load trimgalore
     module load cutadapt
 
-    trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 --nextera -j 4 --basename ${sample_id} 
+    ## remove specifically nextera or illumina adapters
+    # trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 --nextera -j 4 --basename ${sample_id} 
+    # trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 --illumina -j 4 --basename ${sample_id} 
+
+    ## remove autodetected adapters
+    trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 -j 4 --basename ${sample_id} 
     """
 }
 
