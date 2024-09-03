@@ -21,6 +21,7 @@ workflow QUALITY_PCA {
     take:
     diffreps_config      //parse_configuration_xls.out.diffreps_config
     peakcaller_xls       //macs2_callpeak.out.xls
+    peakcaller_name
 
     main:
 
@@ -41,11 +42,12 @@ workflow QUALITY_PCA {
                     .toList()) 
         .map{group_name, tr_name, ctrl_name, tr_samples, ctrl_samples,l -> 
                 def xls = l.findAll{it =~ "${tr_samples[0]}|${ctrl_samples[0]}"}
-                return [group_name, tr_name[0], ctrl_name[0], tr_samples[0], ctrl_samples[0], xls]
+                return [group_name, tr_name[0], ctrl_name[0], tr_samples[0], ctrl_samples[0], peakcaller_name, xls]
             } 
          
     pairs_to_compare | quality_pca_correlation  
-    quality_pca_correlation.out.pdfs.collect() | combine_pdf
+    // quality_pca_correlation.out.pdfs.collect() | combine_pdf
+    combine_pdf(quality_pca_correlation.out.pdfs.collect(), peakcaller_name)
 
     // emit:
     // // input_params = quality_pca_correlation.out 
@@ -62,7 +64,7 @@ process quality_pca_correlation {
     publishDir path: "${params.output_dir}/summary/quality_pca_data/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
     input:
-    tuple val(group_name), val(tr_name), val(ctrl_name), val(tr_samples), val(ctrl_samples), path(xls_files)
+    tuple val(group_name), val(tr_name), val(ctrl_name), val(tr_samples), val(ctrl_samples), val(peakcaller_name), path(xls_files)
     
     output:
     path("*.pdf"), emit: pdfs
@@ -74,13 +76,15 @@ process quality_pca_correlation {
     quality_pca.R --treatment_name $tr_name \
         --control_name $ctrl_name \
         --treatment_samples '$tr_samples'\
-        --control_samples '$ctrl_samples'
+        --control_samples '$ctrl_samples'\
+        --peakcaller $peakcaller_name
 
     quality_pca.R --treatment_name $tr_name \
         --control_name $ctrl_name \
         --treatment_samples '$tr_samples'\
         --control_samples '$ctrl_samples' \
-        --remove_chrXY
+        --remove_chrXY \
+        --peakcaller $peakcaller_name
     """
 }
 
@@ -92,6 +96,7 @@ process combine_pdf {
 
     input:
     path(pdfs)
+    val(peakcaller_name)
 
     output:
     path("Summary*.pdf")
@@ -101,6 +106,7 @@ process combine_pdf {
     """
     module load poppler
     all_pdfs=(\$(find . -name '*.pdf' | sort))
-    pdfunite \${all_pdfs[@]} "Summary_PCA_correlation_plots.pdf"
+    pdfunite \${all_pdfs[@]} "Summary_${peakcaller_name}_PCA_correlation_plots.pdf"
+
     """
 }

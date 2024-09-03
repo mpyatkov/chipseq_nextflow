@@ -27,12 +27,13 @@ library(ggpubr)
 library(tidyverse)
 
 ParseArguments <- function() {
-  p <- arg_parser('PCA for MACS2 narrow peaks')
+  p <- arg_parser('PCA for MACS2/SICER peaks')
   p <- add_argument(p,'--treatment_name', default="", help="treatment group name")
   p <- add_argument(p,'--control_name', default="", help="control group name")
   p <- add_argument(p,'--treatment_samples', default="", help="list of samples separated by pipe operator. ex. 'G123_M1|G123_M2' which represent treatment condition")
   p <- add_argument(p,'--control_samples', default="", help="list of samples separated by pipe operator. ex. 'G123_M1|G123_M2' which represent control condition")
   p <- add_argument(p,'--remove_chrXY', flag = T, help="remove chromosomes X and Y from analysis")
+  p <- add_argument(p,'--peakcaller', default = "MACS2", help="peakcaller MACS2|SICER")
   return(parse_args(p))
 }
 
@@ -59,35 +60,44 @@ if (DEBUG) {
   argv$remove_chrXY <- F
 }
 
-macs2_all <- map(list.files(pattern = "xls$"), \(f){
+all_peaks <- if (argv$peakcaller == "MACS2") {
   
-  sample_id <- str_remove(basename(f), "_narrow_MACS2_peaks.xls")
-  group <- case_when(str_detect(f,argv$treatment_samples) ~ argv$treatment_name,
-                     TRUE ~ argv$control_name)
-
-  read_tsv(f, col_names = T, comment = "#") %>% 
-    select(seqnames = chr, start, end, pileup) %>% 
-    mutate(group = group, sample_id = sample_id)
-}) %>% list_rbind()
-
-if (argv$remove_chrXY) {
-  macs2_all <- macs2_all %>% 
-    filter(!str_detect(seqnames, "chrX|chrY"))
+  map(list.files(pattern = "xls$"), \(f){
+    
+    sample_id <- str_remove(basename(f), "_narrow_MACS2_peaks.xls")
+    group <- case_when(str_detect(f,argv$treatment_samples) ~ argv$treatment_name,
+                       TRUE ~ argv$control_name)
+    
+    read_tsv(f, col_names = T, comment = "#") %>% 
+      select(seqnames = chr, start, end, pileup) %>% 
+      mutate(group = group, sample_id = sample_id)
+  }) %>% list_rbind()
+  
+} else {
+  
+  map(list.files(pattern = "bed$"), \(f){
+    
+    sample_id <- str_remove(basename(f), "_epic_bed6.bed")
+    group <- case_when(str_detect(f,argv$treatment_samples) ~ argv$treatment_name,
+                       TRUE ~ argv$control_name)
+    
+    read_tsv(f, col_names = F, comment = "#") %>% 
+      select(seqnames = X1, start = X2, end = X3, pileup = X4) %>% 
+      mutate(group = group, sample_id = sample_id)
+  }) %>% list_rbind()
+  
 }
 
 
+if (argv$remove_chrXY) {
+  all_peaks <- all_peaks %>% 
+    filter(!str_detect(seqnames, "chrX|chrY"))
+}
+
 ## calculate union of peaks
-macs2_union <- macs2_all %>% 
+peaks_union <- all_peaks %>% 
   plyranges::as_granges() %>% 
   GenomicRanges::reduce(., min.gapwidth = 0L)
-
-# macs2_combined <- plyranges::join_overlap_left(macs2_union, macs2_all_norm %>% plyranges::as_granges()) %>% 
-#   as_tibble() %>% 
-#   distinct() %>% 
-#   filter(pileup == max(pileup), .by = c(seqnames,start,end,sample_id)) %>% 
-#   mutate(sample_id = str_glue("{sample_id}_{group}")) %>% 
-#   add_count(seqnames, start,end, name = "number_of_samples_in_region") %>% 
-#   filter(number_of_samples_in_region > 1) 
 
 ## Removing peaks which overlaps only by one sample
 ## 1. merge all samples (union)
@@ -96,7 +106,7 @@ macs2_union <- macs2_all %>%
 ## 4. calculate number of samples in region
 ## 5. filter out regions which overlapped by only 1 sample
 
-macs2_combined <- plyranges::join_overlap_left(macs2_union, macs2_all %>% plyranges::as_granges()) %>% 
+peaks_combined <- plyranges::join_overlap_left(peaks_union, all_peaks %>% plyranges::as_granges()) %>% 
   as_tibble() %>% 
   distinct() %>%
   summarise(pileup = sum(pileup), .by = c(seqnames,start,end,sample_id,group)) %>% 
@@ -106,17 +116,17 @@ macs2_combined <- plyranges::join_overlap_left(macs2_union, macs2_all %>% plyran
 
 ## normalization coefficients (min(sum(pileup))/sum(pileup_i))
 ## calculated only for filtered and merged regions
-macs2_all_norm <- macs2_combined %>%
+all_peaks_norm <- peaks_combined %>%
   select(sample_id, pileup) %>%
   summarise(n = sum(pileup), .by = sample_id) %>% 
   mutate(n = min(n)/n) %>% 
   #print() %>%  ## show normalization factors
-  left_join(macs2_combined, ., join_by(sample_id)) %>% 
+  left_join(peaks_combined, ., join_by(sample_id)) %>% 
   mutate(pileup = pileup*n) %>% 
   select(-n)
 
 ## stats table
-stats_table_before <- macs2_all %>%
+stats_table_before <- all_peaks %>%
   select(sample_id, pileup, group) %>%
   add_count(sample_id, name = "n_raw_peaks") %>% 
   summarise(pileup_sum_raw = sum(pileup), n_peaks_raw = max(n_raw_peaks), .by = c(sample_id, group)) %>% 
@@ -125,7 +135,7 @@ stats_table_before <- macs2_all %>%
   arrange(desc(group)) %>% 
   select(-group) 
 
-stats_table_after <- macs2_combined %>% 
+stats_table_after <- peaks_combined %>% 
   select(sample_id, pileup, group) %>%
   add_count(sample_id, name = "n_peaks") %>% 
   summarise(pileup_sum = sum(pileup), n_peaks = max(n_peaks), .by = c(sample_id, group)) %>% 
@@ -176,7 +186,7 @@ stats_plot <- stats_table_formatted %>%
 
 ## data to export
 if (!argv$remove_chrXY){
-  raw_export <- macs2_combined %>% 
+  raw_export <- peaks_combined %>% 
     select(-group) %>% 
     pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0)
   nm <- names(raw_export) %>% keep(~str_detect(., "Male|Female"))
@@ -186,7 +196,7 @@ if (!argv$remove_chrXY){
     relocate(all_of(nm), .after = last_col())
   
   rm(nm)
-  norm_export <- macs2_all_norm %>% 
+  norm_export <- all_peaks_norm %>% 
     select(-group) %>% 
     pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0)
   nm <- names(norm_export) %>% keep(~str_detect(., "Male|Female"))
@@ -201,12 +211,12 @@ if (!argv$remove_chrXY){
 }
 
 ## PCA
-pca_df <- macs2_all_norm %>% 
+pca_df <- all_peaks_norm %>% 
   pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0) %>% 
   select(-c(1:5)) %>% 
   t() %>% as.data.frame() %>% 
   tibble::rownames_to_column(var = "sample_id") %>% 
-  left_join(., macs2_all_norm %>% select(sample_id, group) %>% distinct()) %>% 
+  left_join(., all_peaks_norm %>% select(sample_id, group) %>% distinct()) %>% 
   relocate(group, .after = sample_id) 
 
 res.pca <- prcomp(pca_df %>% select(-sample_id,-group),  scale = T, center = T)  
@@ -236,7 +246,7 @@ pca_plot <- ggplot2::autoplot(res.pca, data = pca_df, label = F) +
 
 
 ## correlation
-order_sort <- macs2_all_norm %>% 
+order_sort <- all_peaks_norm %>% 
   select(sample_id, group) %>% 
   distinct() %>% 
   arrange(desc(group), sample_id) %>% 
@@ -244,7 +254,7 @@ order_sort <- macs2_all_norm %>%
   select(-group)
 
 method <- "pearson"
-cor_df <- macs2_all_norm %>%
+cor_df <- all_peaks_norm %>%
   left_join(., order_sort, join_by(sample_id)) %>% 
   arrange(sort_order) %>% select(-sort_order) %>% 
   pivot_wider(names_from = sample_id, values_from = pileup, values_fill = 0) %>% 
@@ -288,7 +298,7 @@ cor_plot <- ggplot(data = td_melt, aes(Var1, Var2, fill = value))+
 
 
 chrXY_status <- ifelse(argv$remove_chrXY, "Without X and Y chromosomes.", "All chromosomes.")
-title <- str_glue("{argv$treatment_name} vs {argv$control_name} (Correlation and PCA plots based on pileup of the MACS2 narrow peaks)\n",
+title <- str_glue("{argv$treatment_name} vs {argv$control_name} (Correlation and PCA plots based on pileup of the {argv$peakcaller} peaks)\n",
                   "Peak union contains {formattable::comma(ncol(pca_df), format = 'd')} peaks after filtering to remove peaks unique to one sample only. {chrXY_status}\n",
                   "Treatment samples: {argv$treatment_samples}\n",
                   "Control samples: {argv$control_samples}\n")
@@ -304,7 +314,7 @@ final_plot <- wrap_elements(cor_plot)+wrap_elements(pca_plot)+stats_plot+
   plot_annotation(title = title)
 
 chrXY_suffix <- ifelse(argv$remove_chrXY, "noXY", "")
-fname <- str_glue("{argv$treatment_name}_vs_{argv$control_name}_Correlation_PCA_{chrXY_suffix}.pdf")
+fname <- str_glue("{argv$treatment_name}_vs_{argv$control_name}_{argv$peakcaller}_Correlation_PCA_{chrXY_suffix}.pdf")
 ggsave(fname, plot = final_plot, width = 22, height = 14)
 # fname <- str_glue("{argv$treatment_name}_vs_{argv$control_name}_Correlation_PCA.png")
 # ggsave(fname, device =ragg::agg_png(res = 400), plot = final_plot, width = 18, height = 10)

@@ -799,9 +799,11 @@ workflow {
     if (params.peakcaller == "MACS2") {
         extra_columns = macs2_callpeak.out.xls // for diffreps summary
         peaks_for_manorm2 = macs2_callpeak.out.narrow_bed
+        quality_control_peaks = macs2_callpeak.out.xls
     } else {
         extra_columns = epic2_callpeak.out.bed6 // for diffreps summary
         peaks_for_manorm2 = epic2_callpeak.out.bed6
+        quality_control_peaks = epic2_callpeak.out.bed6
     }
 
     DIFFREPS(
@@ -825,7 +827,8 @@ workflow {
 
     QUALITY_PCA(
         diffreps_config_ch,
-        macs2_callpeak.out.xls
+        quality_control_peaks,
+        params.peakcaller
     )
 
 
