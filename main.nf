@@ -392,7 +392,8 @@ process create_sample_specific_tracks {
         --sample_labels ${sample_labels} \
         --sid_tracks ${sid_tracks} \
         --data_path ${data_path} \
-        --output_name "sid_tracks.txt"
+        --output_name "sid_tracks.txt" \
+        --peakcaller ${params.peakcaller}
 
     ## create all_bigwig_group_autoscale_hub.txt
     convert_tohub.py ${params.dataset_label} ./bigwig_for_hub.csv
