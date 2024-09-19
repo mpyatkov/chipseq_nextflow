@@ -10,7 +10,7 @@ config_dir="raw_configs"
 output_dir="RESULTS_${dataset_label}"
 
 echo "Copying xls config to output directory"
-mkdir -p ${output_dir} && cp ${xlsconfig} ${output_dir}
+mkdir -p "${output_dir}/summary/" && cp ${xlsconfig} "${output_dir}/summary/"
 
 RED=$(tput setaf 1)
 GREEN=$(tput setaf 2)
