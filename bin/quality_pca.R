@@ -304,9 +304,9 @@ title <- str_glue("{argv$treatment_name} vs {argv$control_name} (Correlation and
                   "Control samples: {argv$control_samples}\n")
 
 layout <- "
-AAABB
-AAABB
-AAACC
+AAAABBB
+AAAABBB
+AAAACCC
 "
 
 final_plot <- wrap_elements(cor_plot)+wrap_elements(pca_plot)+stats_plot+
