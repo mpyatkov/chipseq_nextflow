@@ -922,13 +922,15 @@ workflow {
                              create_sample_specific_tracks.out.bigwig_hub)
     }
 
-    // calculate overlaps for all MACS2 narrow/broad peaks
-    macs2_narrow_broad_ch = macs2_callpeak.out.xls
+    // calculate overlaps for all MACS2 narrow/broad and SICER peaks
+    // for each type of peaks create separate xlsx report
+    peaks_for_aggregation = macs2_callpeak.out.xls
         .mix(macs2_callpeak.out.broad_xls)
+        .mix(epic2_callpeak.out.bed6)
         .map{sid,bedfile -> bedfile}
         .collect()
 
-    extradetailed_stats_for_macs2(macs2_narrow_broad_ch, params.sample_labels_config)
+    extradetailed_peaks_overlaps(peaks_for_aggregation, params.sample_labels_config)
     
     //picard
     collect_metrics(bam_count.out.final_bam)
@@ -1011,14 +1013,14 @@ process diffreps_manorm2_overlap_general {
 }
 
 
-process extradetailed_stats_for_macs2 {
+process extradetailed_peaks_overlaps {
     
     executor "local"
     // echo true
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/summary/MACS2_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/extradetailed_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
     input:
     path(peaks)
@@ -1032,6 +1034,7 @@ process extradetailed_stats_for_macs2 {
     module load R/${params.rversion}
     detailed_macs2_peaks_overlap.R --peak_prefix "broad" --sample_labels ./sample_labels.csv
     detailed_macs2_peaks_overlap.R --peak_prefix "narrow" --sample_labels ./sample_labels.csv
+    detailed_epic2_peaks_overlap.R --peak_prefix "epic" --sample_labels ./sample_labels.csv
     """
 }
 
