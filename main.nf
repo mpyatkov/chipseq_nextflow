@@ -26,6 +26,7 @@ params.trim_adapters = true
 include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
 include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
+include {COMBINE_HIST_PDF} from './subworkflow/combine_hist_pdf.nf'
 
 process trim_adapters_paired {
     tag "${sample_id}"
@@ -853,22 +854,14 @@ workflow {
         
     diffreps_manorm2_overlap_general(only_reports_ch)
 
-
-    //Combine aggregated diffreps histograms and manorm2 histogram
-    mn2_gr_hist_pdf = MANORM2.out.manorm2_histogram 
-        .map{meta,rest -> [meta.group_name, rest]}
-        .groupTuple()
-    
-    // dr_gr_hist_pdf = DIFFREPS.out.aggregated_histograms_diffreps 
-    //     .map{meta, rest -> [meta.group_name, rest]}
-    //     .groupTuple() 
-
-    combined_mn2_dr_pdf = DIFFREPS.out.aggregated_histograms_diffreps
-        .join(mn2_gr_hist_pdf) 
-
-    combine_mn2_dr_pdfs(combined_mn2_dr_pdf)
-
-    
+    // Combine MAnorm2 and diffReps pdfs
+    COMBINE_HIST_PDF (
+        DIFFREPS.out.aggregated_histograms_diffreps_noxy,    
+        DIFFREPS.out.aggregated_histograms_diffreps_allchr,
+        MANORM2.out.manorm2_histogram_noxy,
+        MANORM2.out.manorm2_histogram_allchr
+    )
+  
     // TRACKS (copying, generating track lines)
     // create_bigwig_files 
     sid_normfact_ch = calc_norm_factors.out.splitCsv(sep: "\t")

@@ -69,7 +69,8 @@ workflow MANORM2 {
     profile = manorm2_create_profile.out.profile
     diff_table = manorm2_diffexp.out.diff_table
     manorm2_track = manorm2_diffexp.out.bb_track
-    manorm2_histogram = manorm2_diffexp.out.manorm2_histograms
+    manorm2_histogram_allchr = manorm2_diffexp.out.manorm2_histograms_allchr
+    manorm2_histogram_noxy = manorm2_diffexp.out.manorm2_histograms_noxy
 }
 
 process manorm2_create_profile {
@@ -118,7 +119,8 @@ process manorm2_diffexp {
     tuple val(meta), path("*.xlsx"), emit: diff_table
     tuple val(meta), path("*.bed"), emit: bed_track
     tuple val(meta.num),val(output_dir), path("*.bb"), optional: true, emit: bb_track
-    tuple val(meta), path("*.pdf"), emit: manorm2_histograms
+    tuple val(meta), path("*noXY*.pdf"), emit: manorm2_histograms_noxy
+    tuple val(meta), path("*AllChr*.pdf"), emit: manorm2_histograms_allchr
     
     script:
     output_dir="${meta.num}_${meta.report_name}_${params.peakcaller}"

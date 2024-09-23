@@ -148,23 +148,41 @@ add_colors <- function(df, hist_colors) {
 mx.manorm2.diff <- add_colors(mx.manorm2.diff, hist_colors = histogram_colors)
 
 ##### CREATE HISTOGRAMS #####
+get_df_histogram <- function(df, filter_xy_chromosomes = F){
 
-df.histogram <- mx.manorm2.diff %>% 
-  filter(padj < 0.05) %>% 
-  select(log2FC = Mval, delta) %>% 
-  drop_na(delta) %>% 
-  add_count(delta) %>% 
-  arrange(delta) %>% 
-  mutate(delta = as.factor(str_glue("{delta} ({n})"))) %>% 
-  select(-n) #%>% 
-  # mutate(ord = as.numeric(str_extract(delta, "\\d+")))
+  df.histogram <- df %>% 
+    {
+      if (filter_xy_chromosomes){
+        filter(., ! chrom %in% c("chrX", "chrY"))
+      } else {
+        .
+      }
+    } %>%
+    filter(padj < 0.05) %>% 
+    select(log2FC = Mval, delta) %>% 
+    drop_na(delta) %>% 
+    add_count(delta) %>% 
+    arrange(delta) %>% 
+    mutate(delta = as.factor(str_glue("{delta} ({n})"))) %>% 
+    select(-n) #%>% 
+    # mutate(ord = as.numeric(str_extract(delta, "\\d+")))
 
-arranged_colors <- mx.manorm2.diff %>% 
-  select(delta,cols) %>% 
-  drop_na() %>%
-  distinct() %>%
-  arrange(delta) %>% 
-  pull(cols) 
+  arranged_colors <- df %>% 
+    {
+      if (filter_xy_chromosomes){
+        filter(., ! chrom %in% c("chrX", "chrY"))
+      } else {
+        .
+      }
+    } %>%
+    select(delta,cols) %>% 
+    drop_na() %>%
+    distinct() %>%
+    arrange(delta) %>% 
+    pull(cols) 
+
+    list(df.histogram = df.histogram, arranged_colors = arranged_colors)
+}
 
 plot_histogram <- function(df.histogram, log2fc_cutoff, title_extra = "", log2fc_label = 1, arranged_colors) {
 
@@ -181,19 +199,29 @@ plot_histogram <- function(df.histogram, log2fc_cutoff, title_extra = "", log2fc
           legend.text=element_text(size=10))
 }
 
+## replace separators for samples representation
+str_control_samples <- str_replace_all(argv$control_samples, "\\|", ",")
+str_treatment_samples <- str_replace_all(argv$treatment_samples, "\\|", ",")
 
-title_manorm2 <-  str_glue("MANORM2 {argv$peakcaller}\nTreatment: {argv$treatment_samples} Control: {argv$control_samples}\n",
-                           "{argv$treatment_name} / {argv$control_name}.\nFold Change for MAnorm2 condition-specific sites\n",
+hist.data_allchr <- get_df_histogram(mx.manorm2.diff, filter_xy_chromosomes = F)
+title_manorm2 <-  str_glue("MANORM2 (all chromosomes) {argv$peakcaller}\n{argv$treatment_name} / {argv$control_name}\nTreatment: {str_treatment_samples}\nControl: {str_control_samples}\n",
+                           "Fold Change for MAnorm2 condition-specific sites\n",
                            "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                            "Weakest_sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
 
+hist.plot <- plot_histogram(hist.data_allchr$df.histogram, log2fc_cutoff = log2fc_cutoff, title_extra = title_manorm2, log2fc_label = log2fc_label, arranged_colors = hist.data_allchr$arranged_colors)
+ggsave(str_glue("{argv$output_prefix}_AllChr_histogram.pdf"), plot = hist.plot, height = 9, width = 9)
 
-hist.plot <- plot_histogram(df.histogram, log2fc_cutoff = log2fc_cutoff, title_extra = title_manorm2, log2fc_label = log2fc_label, arranged_colors = arranged_colors)
-#output_name_histograms <- str_glue("Histograms_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}_{normalization_caller}.pdf")
 
-#top_header <- str_glue("MANORM2 {argv$peak_caller}, Treatment: {argv$treatment_samples} Control: {argv$control_samples}")
-#hist.plot <- hist.plot + plot_annotation(title = top_header)
-ggsave(str_glue("{argv$output_prefix}_histogram.pdf"), plot = hist.plot, height = 9, width = 9)
+hist.data_noXY <- get_df_histogram(mx.manorm2.diff, filter_xy_chromosomes = T)
+title_manorm2_noxy <-  str_glue("MANORM2 (without X and Y chrom)\n {argv$peakcaller}{argv$treatment_name} / {argv$control_name}\nTreatment: {str_treatment_samples}\nControl: {str_control_samples}\n",
+                           "Fold Change for MAnorm2 condition-specific sites\n",
+                           "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
+                           "Weakest_sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n")
+
+hist.plot <- plot_histogram(hist.data_noXY$df.histogram, log2fc_cutoff = log2fc_cutoff, title_extra = title_manorm2_noxy, log2fc_label = log2fc_label, arranged_colors = hist.data_noXY$arranged_colors)
+ggsave(str_glue("{argv$output_prefix}_noXY_histogram.pdf"), plot = hist.plot, height = 9, width = 9)
+
 
 ##### CREATE BED TRACKS #####
 ucsc_fname_filtered <- str_glue("UCSC_FILTERED_track_{argv$treatment_name}_vs_{argv$control_name}_{argv$peakcaller}_MANORM2.bed")

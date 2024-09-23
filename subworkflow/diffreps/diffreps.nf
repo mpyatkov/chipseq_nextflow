@@ -55,7 +55,7 @@ process diffreps_summary {
     output:
     tuple val(meta.num), path("${output_dir}/*")
     tuple val(meta), path("*.xlsx"), emit: full_report
-    tuple val(meta.group_name), path("Hist*.pdf"), emit: hist_pdf
+    tuple val(meta.group_name), path("Histograms_AllChr*.pdf"), path("Histograms_noXY*.pdf"), emit: hist_pdf
     tuple val(meta.group_name), path("FDR*.pdf"), emit: fdr_pdf
     tuple val(meta.group_name), path("Bar*.pdf"), emit: bar_pdf
     tuple val(meta.num), val(output_dir), path("*.bb"), emit: diffreps_track
@@ -76,26 +76,27 @@ process aggregate_diffreps_pdf {
     publishDir path: "${params.output_dir}/summary/Feature_Barcharts/", mode: "copy", pattern: "${group_name}_*Feature*.pdf", overwrite: true
     
     input:
-    tuple val(group_name), path(hist), path(fdr), path(bar)
+    tuple val(group_name), path(hist_allchr), path(hist_noxy), path(fdr), path(bar)
 
     output:
     path("${group_name}_*.pdf")
-    tuple val(group_name), path("${group_name}_Histogram.pdf"), emit: diffreps_aggregated_histogram
+    tuple val(group_name), path("${group_name}_AllChr_Histogram.pdf"), emit: diffreps_aggregated_histogram_allchr
+    tuple val(group_name), path("${group_name}_noXY_Histogram.pdf"), emit: diffreps_aggregated_histogram_noxy
     
     script:
     """
     module load poppler
-    hist_pdfs=(\$(find . -name '*Histograms*.pdf' | sort))
-    pdfunite \${hist_pdfs[@]} "${group_name}_Histogram.pdf"
-    ## pdfunite $hist "${group_name}_Histogram.pdf"
+    allchr_hist_pdf=(\$(find . -name '*Histograms_AllChr*.pdf' | sort))
+    pdfunite \${allchr_hist_pdf[@]} "${group_name}_AllChr_Histogram.pdf"
+
+    noXY_hist_pdf=(\$(find . -name '*Histograms_noXY*.pdf' | sort))
+    pdfunite \${noXY_hist_pdf[@]} "${group_name}_noXY_Histogram.pdf"
 
     fdr_pdfs=(\$(find . -name '*FDR*.pdf' | sort))
     pdfunite \${fdr_pdfs[@]} "${group_name}_FDR_Barcharts_${params.peakcaller}.pdf"
-    ## pdfunite $fdr "${group_name}_FDR_Barcharts_${params.peakcaller}.pdf"
 
     features_pdfs=(\$(find . -name 'Barchart_*.pdf' | sort))
     pdfunite \${features_pdfs[@]} "${group_name}_Feature_Barcharts_${params.peakcaller}.pdf"
-    ## pdfunite $bar "${group_name}_Feature_Barcharts_${params.peakcaller}.pdf"
     """
 }
 
@@ -167,7 +168,7 @@ workflow DIFFREPS {
     
     //aggregate diffpres pdfs
     hist_pdfs = diffreps_summary.out.hist_pdf
-        .groupTuple()
+        .groupTuple() 
     fdr_pdfs = diffreps_summary.out.fdr_pdf
         .groupTuple()
     bar_pdfs = diffreps_summary.out.bar_pdf
@@ -187,5 +188,6 @@ workflow DIFFREPS {
     emit:
     diffreps_track = diffreps_summary.out.diffreps_track
     full_report = diffreps_summary.out.full_report
-    aggregated_histograms_diffreps = aggregate_diffreps_pdf.out.diffreps_aggregated_histogram    
+    aggregated_histograms_diffreps_allchr = aggregate_diffreps_pdf.out.diffreps_aggregated_histogram_allchr    
+    aggregated_histograms_diffreps_noxy = aggregate_diffreps_pdf.out.diffreps_aggregated_histogram_noxy    
 }

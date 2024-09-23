@@ -340,48 +340,15 @@ ggsave(output_name_fdrbarchart, plot = final_fdr_barchart, height = 7, width = 1
 #### Histogram
 #### input: gr.ann.noblack.extra
 
-
-plot_histogram_bk <- function(df, delta_column, log2fc_cutoff, min_avg_count, filter_by_peakcaller_overlap = F, title_extra = "", log2fc_label = 1, swap_colors = T) {
-  
-  histogram_colors <- if (swap_colors){
-    ## down - red, up - blue
-    c("pink", "lightblue", "grey","red", "blue")
-  } else {
-    ## up - red, down - blue
-    c("lightblue", "pink", "grey","blue", "red")    
-  }
-  
+plot_histogram <- function(df, filter_by_peakcaller_overlap = F, title_extra = "", filter_xy_chromosomes = F) { ## df should be tibble not granges
   df.histogram <- df %>% 
-    as_tibble() %>% 
-    #filter(padj < 0.05) %>% 
-    select(delta, log2FC, peakcaller_overlap) %>% 
     {
-      if(filter_by_peakcaller_overlap){
-        filter(., peakcaller_overlap == 1)
+      if(filter_xy_chromosomes){
+        filter(., ! seqnames %in% c("chrX", "chrY"))
       } else {
         .
-      }} %>%
-    drop_na(delta) %>% 
-    add_count(delta) %>% 
-    mutate(delta = as.factor(str_glue("{delta} ({n})"))) %>% 
-    select(-n)
-    
-  ggplot(df.histogram, aes(x=log2FC, fill = delta))+ #factor(delta, levels = names(cols_vector))
-    geom_histogram(binwidth=.1)+ ## alpha = 0.9
-    # scale_fill_manual(name = "Site_Category", values = as.vector(cols_vector), labels = names(cols_vector))+
-    scale_fill_manual(name = str_glue("Site_Category ({nrow(df.histogram)} total sites)"), 
-                      values = histogram_colors, ## c("lightblue", "pink", "grey","blue", "red")
-                      drop = FALSE)+
-    ggtitle(str_glue("{title_extra}")) + 
-    ylab("Count of Condition-specific Regions") + 
-    xlab("log2(Fold Change)")+
-    theme_classic()+
-    theme(legend.background = element_rect(colour = "black"), 
-          legend.text=element_text(size=10))
-}
-
-plot_histogram <- function(df, filter_by_peakcaller_overlap = F, title_extra = "") { ## df should be tibble not granges
-  df.histogram <- df %>% 
+      }
+    } %>%
     select(delta, log2FC, peakcaller_overlap, cols) %>% 
     {
       if(filter_by_peakcaller_overlap){
@@ -416,28 +383,59 @@ plot_histogram <- function(df, filter_by_peakcaller_overlap = F, title_extra = "
 }
 
 
-title_unfiltered = str_glue("Unfiltered {TREATMENT_NAME} / {CONTROL_NAME}.\nFold Change for diffReps condition-specific sites\n",
+title_unfiltered = str_glue("Unfiltered {TREATMENT_NAME} / {CONTROL_NAME} (all chromosomes).\nFold Change for diffReps condition-specific sites\n",
                             "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                             "Weakest sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                             "Low read sites: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count < {min_avg_count}\n")
 
 hist_unfiltered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
                                   filter_by_peakcaller_overlap = F, 
-                                  title_extra = title_unfiltered)
+                                  title_extra = title_unfiltered,
+                                  filter_xy_chromosomes = F)
 
-title_filtered = str_glue("{peak_caller} filtered {TREATMENT_NAME} / {CONTROL_NAME}.\nFold Change for diffReps condition-specific sites\n",
+title_filtered = str_glue("{peak_caller} filtered {TREATMENT_NAME} / {CONTROL_NAME} (all chromosomes).\nFold Change for diffReps condition-specific sites\n",
                           "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                           "Weakest sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                           "Low read sites: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count < {min_avg_count}\n")
 
 hist_filtered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
                                   filter_by_peakcaller_overlap = T, 
-                                  title_extra = title_filtered)
+                                  title_extra = title_filtered,
+                                  filter_xy_chromosomes = F)
 
 histograms <- hist_unfiltered + hist_filtered+plot_annotation(title = top_header)
 #output_name_histograms <- str_glue("Histograms_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.pdf")
-output_name_histograms <- str_glue("Histograms_{normalization_caller}_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}.pdf")
+output_name_histograms <- str_glue("Histograms_AllChr_{normalization_caller}_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}.pdf")
 ggsave(output_name_histograms, plot = histograms, height = 9, width = 18)
+
+
+## histograms without chrX and chrY
+title_unfiltered_noXY = str_glue("Unfiltered {TREATMENT_NAME} / {CONTROL_NAME} (without X and Y chrom).\nFold Change for diffReps condition-specific sites\n",
+                            "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
+                            "Weakest sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
+                            "Low read sites: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count < {min_avg_count}\n")
+
+hist_unfiltered_noXY <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
+                                  filter_by_peakcaller_overlap = F, 
+                                  title_extra = title_unfiltered_noXY,
+                                  filter_xy_chromosomes = T)
+
+title_filtered_noXY = str_glue("{peak_caller} filtered {TREATMENT_NAME} / {CONTROL_NAME} (without X and Y chrom).\nFold Change for diffReps condition-specific sites\n",
+                          "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
+                          "Weakest sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
+                          "Low read sites: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count < {min_avg_count}\n")
+
+hist_filtered_noXY <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
+                                  filter_by_peakcaller_overlap = T, 
+                                  title_extra = title_filtered_noXY,
+                                  filter_xy_chromosomes = T)
+
+histograms_noXY <- hist_unfiltered_noXY + hist_filtered_noXY+plot_annotation(title = top_header)
+#output_name_histograms <- str_glue("Histograms_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.pdf")
+output_name_histograms <- str_glue("Histograms_noXY_{normalization_caller}_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{peak_caller}.pdf")
+ggsave(output_name_histograms, plot = histograms_noXY, height = 9, width = 18)
+
+
 
 #### barplot by features
 #### input: gr.ann.noblack.extra
@@ -692,23 +690,3 @@ writeData(wb, sheet = sheet_name, filtered_xls, startRow = 6, startCol = 1)
 
 # saveWorkbook(wb, str_glue("Summary_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.xlsx"), overwrite = T)
 saveWorkbook(wb, str_glue("Summary_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{normalization_caller}.xlsx"), overwrite = T)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
