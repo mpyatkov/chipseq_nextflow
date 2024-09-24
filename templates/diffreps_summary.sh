@@ -40,7 +40,8 @@ module load bedtools
                  --histone_mark ${DATASET_LABEL} \
                  --normalization_caller "${NORMALIZATION}_${WINDOW_SIZE}" \
                  --treatment_samples ${TREATMENT_SAMPLES}  \
-                 --control_samples ${CONTROL_SAMPLES})
+                 --control_samples ${CONTROL_SAMPLES} \
+                 --exp_number ${NUM})
 
 mkdir -p plots && cp *.pdf ./plots
 mkdir -p fullreport && cp *.xlsx ./fullreport

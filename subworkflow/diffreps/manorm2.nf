@@ -124,7 +124,7 @@ process manorm2_diffexp {
     
     script:
     output_dir="${meta.num}_${meta.report_name}_${params.peakcaller}"
-    output_prefix = "${meta.group_name}_MANORM2"
+    output_prefix = "Summary_${meta.group_name}_MANORM2"
     
     """
     module load R/${params.rversion}
@@ -136,7 +136,8 @@ process manorm2_diffexp {
         --treatment_samples '${meta.treatment_samples}' \
         --control_name ${meta.control_name} \
         --treatment_name ${meta.treatment_name} \
-        --output_prefix ${output_prefix}
+        --output_prefix ${output_prefix} \
+        --exp_number ${meta.num}
 
     # ignore chrM,random and header
     if [[ \$(wc -l <*.bed) -ge 2 ]]; then

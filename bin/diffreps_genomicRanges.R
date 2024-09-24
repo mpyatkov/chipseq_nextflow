@@ -23,6 +23,7 @@ ParseArguments <- function() {
   p <- add_argument(p, '--histone_mark', default = "default", help = "Dataset_id + Histone mark (ex.G215_K27ac)")
   p <- add_argument(p, '--treatment_samples', default = "", help = "Treatment samples (ex. G215M1,G215M2)")
   p <- add_argument(p, '--control_samples', default = "", help = "Control samples (ex. G215M3,G215M4)")
+  p <- add_argument(p, '--exp_number', default = "00", help = "Experiment number, need only for output report name")
   
   return(parse_args(p))
 }
@@ -58,6 +59,7 @@ histone_mark <- argv$histone_mark
 normalization_caller <- argv$normalization_caller
 treatment_samples <- argv$treatment_samples %>% str_replace_all(., "\\|",",")
 control_samples <- argv$control_samples %>% str_replace_all(., "\\|",",")
+exp_number <- argv$exp_number
 
 log2fc_label <- 2^log2fc_cutoff
 swap_colors <- TRUE
@@ -689,4 +691,5 @@ writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_sample
 writeData(wb, sheet = sheet_name, filtered_xls, startRow = 6, startCol = 1)
 
 # saveWorkbook(wb, str_glue("Summary_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.xlsx"), overwrite = T)
-saveWorkbook(wb, str_glue("Summary_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{normalization_caller}.xlsx"), overwrite = T)
+padded_exp_number<-str_pad(exp_number, width = 2, pad = "0", side = "left")
+saveWorkbook(wb, str_glue("{padded_exp_number}_Summary_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{normalization_caller}.xlsx"), overwrite = T)

@@ -33,6 +33,8 @@ ParseArguments <- function() {
   p <- add_argument(p,'--treatment_name', default="", help="treatment group name")
   p <- add_argument(p,'--peakcaller', default="MACS2", help = "MACS2/EPIC2/SICER peakcaller name")
   p <- add_argument(p,'--output_prefix', default="", help="name for group of comparisons")
+  p <- add_argument(p,'--exp_number', default="00", help="Experiment number")
+
   return(parse_args(p))
 }
 
@@ -121,11 +123,12 @@ mx.manorm2.diff <- mx.manorm2.diff %>%
                            Mval > 0 & abs(Mval) <= log2fc_cutoff & padj < 0.05 ~  str_glue("3_{argv$treatment_name}_Weakest_sites"),
                            .default = NA))
   
-mx.manorm2.diff %>% arrange(delta) %>% writexl::write_xlsx(path = str_glue("Summary_{argv$output_prefix}.xlsx"), col_names = T)
+# mx.manorm2.diff %>% arrange(delta) %>% writexl::write_xlsx(path = str_glue("Summary_{argv$output_prefix}.xlsx"), col_names = T)
+exp_number<-str_pad(argv$exp_number, width = 2, pad = "0", side = "left")
+xlsx_output_name<-str_glue("{exp_number}_{argv$output_prefix}.xlsx")
+mx.manorm2.diff %>% arrange(delta) %>% writexl::write_xlsx(path = xlsx_output_name, col_names = T)
   
 #### add colors
-
-
 add_colors <- function(df, hist_colors) {
 
   delta.ord <- df %>% select(delta) %>% 
