@@ -374,6 +374,27 @@ process create_bigwig_files {
     """
 }
 
+process create_group_combined_tracks {
+    executor 'local'
+
+    input:
+    path(group_tracks)
+
+    output:
+    path("bw_combined_tracks.txt")
+
+    script:
+    data_path="${workflow.userName}/${params.dataset_label}"
+
+    """
+    module load R/${params.rversion}
+    generate_bw_combined_tracks.R \
+        --combined_tracks ${group_tracks} \
+        --data_path ${data_path} \
+        --output_name "bw_combined_tracks.txt"
+    """
+}
+
 process create_sample_specific_tracks {
     executor 'local'
     
@@ -529,6 +550,7 @@ process copy_files_to_server {
     input:
     path(files)
     path(track_lines)
+    path(combined_track_lines)
     path(track_hub)
 
     // output:
@@ -540,7 +562,7 @@ process copy_files_to_server {
     """
     mkdir -p ${data_path}/TRACK_LINES
     cp ${files} ${data_path}
-    cp ${track_lines} ${track_hub} ${data_path}/TRACK_LINES/
+    cp ${track_lines} ${track_hub} ${combined_track_lines} ${data_path}/TRACK_LINES/
     """
 }
 
@@ -869,9 +891,25 @@ workflow {
     
     sid_fr_norm = bam_count.out.fragments
         .join(sid_normfact_ch)
-    
-    create_bigwig_files(sid_fr_norm, mm9_chrom_sizes)
 
+    // Combine bigWig files for one group into one track
+    create_bigwig_files(sid_fr_norm, mm9_chrom_sizes)
+    bigwig_group_ch = sample_labels_config_ch
+        .splitCsv()
+        .join(create_bigwig_files.out)
+        .map{sid,n1,id1,n2,r,g,b,pth -> 
+             [n2, sid, "${r}__${g}__${b}", pth]
+        }
+        .groupTuple() 
+        .map{group_name, sids, colors, paths ->
+            def new_sids = sids.collect{it -> it.toString()}.sort().join("__") 
+            return [group_name, new_sids, colors[1], paths]
+        } 
+
+    combine_bigwig_tracks(bigwig_group_ch, mm9_chrom_sizes)
+    combined_bigwig_ch = combine_bigwig_tracks.out
+        .map{group_name,samples_str,color,pth -> [group_name, samples_str, color, pth.getName()]}
+        .collectFile{item -> item.join(",")+'\n'}    
 
     // create track lines (sample specific)
     sid_specific_ch = create_bigwig_files.out
@@ -891,11 +929,16 @@ workflow {
         .combine(diffreps_config_ch) 
 
     create_sample_specific_tracks(sid_specific_ch)
-
     create_diffreps_tracks(group_specific_ch)
+    create_group_combined_tracks(combined_bigwig_ch)
 
-    track_lines = Channel.from(default_tracks).concat(create_diffreps_tracks.out,create_sample_specific_tracks.out.sid_tracks)
+    track_lines = Channel.from(default_tracks)
+        .concat(create_diffreps_tracks.out,create_sample_specific_tracks.out.sid_tracks)
         .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text}
+
+    combined_bw_track_lines = Channel.from(default_tracks)
+        .concat(create_diffreps_tracks.out,create_group_combined_tracks.out)
+        .collectFile(name: 'autolimit_combined_tracks.txt', sort: 'index'){item -> item.text}
 
     // copy bb,bam,bw files to server
     bw_files = create_bigwig_files.out.map{it -> it[1]} 
@@ -905,13 +948,15 @@ workflow {
     bam_files=bam_count.out.final_bam.map{it->[it[2],it[3]]}
     diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]}
     manorm2_files=MANORM2.out.manorm2_track.map{it->it[2]}
-    
+    combined_bwfiles=combine_bigwig_tracks.out.map{it->it[3]} 
+
     // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
-    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, manorm2_files).collect()
-    
+    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, manorm2_files, combined_bwfiles).collect()
+
     if (params.copy_to_server_bool){
         copy_files_to_server(track_files_to_server,
                              track_lines,
+                             combined_bw_track_lines,
                              create_sample_specific_tracks.out.bigwig_hub)
     }
 
@@ -950,15 +995,6 @@ workflow {
     //      .stripIndent()
 
 }
-
-//TODO: To avoid multiple if conditions that diffreps config exists
-// it is required to pack creating tracks to separate workflow
-// if (diffreps) {
-//     foo(input1)
-// } else {
-//     foo(input2)
-// }
-
 
 process diffreps_manorm2_overlap {
     tag "${group_name}"
@@ -1051,5 +1087,33 @@ process combine_mn2_dr_pdfs {
     ls -l
     module load poppler
     pdfunite $manorm2_pdf $diffreps_pdfs "${group_name}_Histogram_Barcharts_${params.peakcaller}.pdf"
+    """
+}
+
+process combine_bigwig_tracks {
+    tag "${group_name}"
+
+    executor 'sge'
+    cpus 1
+    memory '8 GB'
+    time '1h'
+
+    beforeScript 'source $HOME/.bashrc'
+    // echo true
+
+    input:
+    tuple val(group_name), val(samples_string), val(color), path(sample_paths)
+    path(mm9_chrom_sizes)
+    
+    output:
+    tuple val(group_name), val(samples_string), val(color), path("${group_name}.bw")
+
+    script:
+    """
+    ## for wiggletools
+    module load miniconda
+    conda activate /projectnb/wax-es/routines/condaenv/wig
+    wiggletools mean *.bw > tmp.wig
+    wigToBigWig tmp.wig ${mm9_chrom_sizes} "${group_name}.bw"
     """
 }
