@@ -527,7 +527,7 @@ filtered_down_barchart <- barchart_feature(feature_colors, filt_df.down_feature,
 
 #final_plot <- list(up_barchart, down_barchart) %>% keep(\(x) is.ggplot(x)) %>% purrr::reduce(`+`)
 final_feature_barchart <- (unfiltered_up_barchart+unfiltered_down_barchart)/(filtered_up_barchart+filtered_down_barchart)+
-  plot_layout(guides = "collect")+
+  # plot_layout(guides = "collect")+ ## sometimes appear en error when trying to collect guides
   plot_annotation(title = top_header)
 
 # output_name_barchart <- str_glue("Barchart_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.pdf")
