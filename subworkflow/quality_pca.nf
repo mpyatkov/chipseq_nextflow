@@ -61,7 +61,7 @@ process quality_pca_correlation {
     executor 'local'
 
     beforeScript 'source $HOME/.bashrc'
-    publishDir path: "${params.output_dir}/summary/quality_pca_data/", mode: "copy", pattern: "*.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/pileup_data_for_pca/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
     input:
     tuple val(group_name), val(tr_name), val(ctrl_name), val(tr_samples), val(ctrl_samples), val(peakcaller_name), path(xls_files)
