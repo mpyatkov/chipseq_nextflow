@@ -6,10 +6,20 @@ module load bedtools
 sample_id="!{sample_id}"
 lib="!{lib}"
 bam="!{bam}"
+model="!{model}"
 mm9_chrom_sizes="!{mm9_chrom_sizes}"
 
-macs2 callpeak -t ${bam} -f ${lib} -g mm -n "${sample_id}_narrow_MACS2" --keep-dup all --nomodel --extsize 200
-macs2 callpeak -t ${bam} -f ${lib} -g mm -n "${sample_id}_broad_MACS2" --keep-dup all --nomodel --extsize 200 --broad
+# By default MACS2 uses model to find 'shift' and 'extsize 'parameters
+# if model are using then MACS2 automatically calculate 'shift' and 'extsize' params:
+# in case when MACS2 uses '--nomodel' parameter, 'shift' and 'extsize' parameters the following:
+# --shift=0
+# --extsize=200
+
+(
+    set -x
+    macs2 callpeak -t ${bam} -f ${lib} -g mm -n "${sample_id}_narrow_MACS2" --keep-dup all ${model}
+    macs2 callpeak -t ${bam} -f ${lib} -g mm -n "${sample_id}_broad_MACS2" --keep-dup all ${model} --broad
+)
 
 function peak_to_bed() {
     local input=$1

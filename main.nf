@@ -1,21 +1,27 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+//>>> PARAMETERS TO CHANGE
+params.copy_to_server_bool=true
+params.trim_adapters = true
+params.peakcaller="MACS2"    // by default going to use MACS2 (SICER/EPIC2 alternative)
+// ChIPSEQ TF                                --> MACS2 model will be used
+// ATAC (DAR), CutNRun, Histone modification --> MACS2 model is not required
+params.macs2_model = false
+//<<< PARAMETERS TO CHANGE
+
 mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: true)
 mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", checkIfExists: true)
 default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
 
 params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
-params.peakcaller="MACS2"    // by default going to use MACS2 (SICER/EPIC2 alternative)
 params.dataset_label="TEST1" // default dataset label if not provided
 params.rversion="4.2"
 params.output_dir="./RESULTS_${params.dataset_label}"
-params.copy_to_server_bool=false
 params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
 params.overwrite_outputs = true
-params.trim_adapters = true
 // need_diffexpr = is_empty_file(params.diffreps_config.toString()) ? false : true
 
 // println(params.input_configs)
@@ -222,6 +228,7 @@ process macs2_callpeak {
 
     shell:
     lib=library == "paired-end" ? "BAMPE" : "BAM"
+    model=params.macs2_model ? "" : "--nomodel"
     template 'macs2_callpeak.sh'
 
     stub:
