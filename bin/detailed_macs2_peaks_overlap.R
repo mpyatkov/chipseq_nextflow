@@ -150,4 +150,5 @@ real_final <- left_join(final_group_presence, final_group_extra_presence, join_b
 # }
 
 real_final %>% 
+  slice_head(n = 999999) %>%
   writexl::write_xlsx(path = output_name, col_names = T)
