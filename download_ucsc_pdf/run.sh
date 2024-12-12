@@ -72,6 +72,9 @@ if [ "${NUMBER_OF_BAD_LOGS}" -ne 0 ]; then
     grep -rL IAMOK *.log
     exit 1
 else
-    echo "All downloads are complete"
+    PDF_DIR="${TOP25DIR_PATH}/summary/UCSC_TOP25_PDFS" 
+    mkdir -p ${PDF_DIR}
+    mv *.pdf "${PDF_DIR}" 
     rm -rf *.log
+    echo "All downloads are complete. Check ${PDF_DIR} for the output"
 fi
