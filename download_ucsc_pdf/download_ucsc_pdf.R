@@ -55,7 +55,11 @@ download_pdf <- function(session, url, outname) {
     str_replace(., "..", "https://genome.ucsc.edu")
   
   # pdf_link
-  download.file(final_pdf_link, destfile = outname)
+  tryCatch({
+    download.file(final_pdf_link, destfile = outname)
+  }, error = function(err) {
+    print(paste0("ERROR: Can't process the following pdf file: ", final_pdf_link, ", output file: ", outname))
+  })
 }
 
 ## returns new (zoomed) coordinates of fragment
@@ -187,6 +191,7 @@ for (i in 1:n) {
   # Increment the progress bar, and update the detail text.
   correct_url <- paste0(init_params$main_url, as.character(bed[i, 1]))
   download_pdf(init_params$session, correct_url, as.character(bed[i, 2]))
+  Sys.sleep(2)
 }
 
 
