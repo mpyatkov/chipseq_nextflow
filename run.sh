@@ -75,8 +75,7 @@ fi
 
 module unload R
 
+module load java/21.0.4
+module load nextflow/24.04.4
 
-module load nextflow
-NXF_OPTS='-Xms500M -Xmx2G' nextflow run main.nf --input_configs ${config_dir} --dataset_label ${dataset_label} --output_dir ${output_dir} --rversion ${RVERSION} -resume
-
-
+NXF_OPTS='-Xms500M -Xmx2G' nextflow run main.nf --input_configs ${config_dir} --dataset_label ${dataset_label} --output_dir ${output_dir} --rversion ${RVERSION} -resume 

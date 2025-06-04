@@ -1,9 +1,10 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+// TODO: use cleanup = true inside nextflow.config to remove the work directory after run 
 //>>> PARAMETERS TO CHANGE
-params.copy_to_server_bool=true
-params.trim_adapters = true
+params.copy_to_server_bool=false
+params.trim_adapters = true // does not have any effect, trimming by default // TODO: deprecated
 params.peakcaller="MACS2"    // by default going to use MACS2 (SICER/EPIC2 alternative)
 // ChIPSEQ TF                                --> MACS2 model will be used
 // ATAC (DAR), CutNRun, Histone modification --> MACS2 model is not required
@@ -15,6 +16,7 @@ mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", chec
 default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
 
 params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
+params.chipseq_bam_cache="/projectnb/wax-es/CHIPSEQ_BAM_CACHE"
 params.dataset_label="TEST1" // default dataset label if not provided
 params.rversion="4.2"
 params.output_dir="./RESULTS_${params.dataset_label}"
@@ -22,19 +24,13 @@ params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
 params.overwrite_outputs = true
-// need_diffexpr = is_empty_file(params.diffreps_config.toString()) ? false : true
-
-// println(params.input_configs)
-// println(params.diffreps_config)
-// println(params.fastq_config)
-// println(params.sample_labels_config)
 
 include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
 include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
 include {COMBINE_HIST_PDF} from './subworkflow/combine_hist_pdf.nf'
 
-process trim_adapters_paired {
+process trim_adapters {
     tag "${sample_id}"
 
     cpus 8
@@ -43,23 +39,32 @@ process trim_adapters_paired {
     beforeScript 'source $HOME/.bashrc'
 
     input:
-    tuple val(sample_id), val(downsample), val(r1), val(r2)
+    tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
 
     output:
-    tuple val(sample_id), val(downsample), path("${sample_id}_val_1.fq.gz"), path("${sample_id}_val_2.fq.gz")
+    tuple val(sample_id), val(library), val(downsample), path("${sample_id}_val_1.fq.gz"), path("${sample_id}_val_2.fq.gz")
 
     script:
-    """
-    module load trimgalore
-    module load cutadapt
 
-    ## remove specifically nextera or illumina adapters
-    # trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 --nextera -j 4 --basename ${sample_id} 
-    # trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 --illumina -j 4 --basename ${sample_id} 
+    lib = library.toString().toLowerCase()
+    if ( lib == "paired") {
+        """
+        module load trimgalore
+        module load cutadapt
 
-    ## remove autodetected adapters
-    trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 -j 4 --basename ${sample_id} 
-    """
+        ## remove autodetected adapters
+        trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 -j 4 --basename ${sample_id}
+        """
+    } else {
+        """
+        module load trimgalore  
+        module load cutadapt
+
+        trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 $r1 -j 4 --basename ${sample_id}
+        # create dummy file for output consistency
+        touch ${sample_id}_val_2.fq.gz
+        """
+    }
 }
 
 process bowtie2_align {
@@ -70,50 +75,79 @@ process bowtie2_align {
     // executor "local"
     cpus 16
     memory '32 GB'
-    
+    debug true
     beforeScript 'source $HOME/.bashrc'
-    
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted.bam*", overwrite: params.overwrite_outputs 
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*.log", overwrite: true
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "library.txt", overwrite: true
+
+    // put to cache without overwrite
+
+    publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}_sorted_filtered.bam*", overwrite: false
+    publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}.bowtie2.log", overwrite: false
+    // publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
+    // publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*.log", overwrite: true
     
     input:
-    tuple val(sample_id), val(downsample), val(r1), val(r2)
+    tuple val(sample_id), val(library), val(downsample), path(r1), path(r2)
     file(anti_blacklist)
     
     output:
-    tuple val(sample_id), val(downsample), val(library), path("${sample_id}_sorted.bam"), path("${sample_id}_sorted.bam.bai"),  emit: bam
+    tuple val(sample_id), val(lib), path("${sample_id}_sorted_filtered.bam"), path("${sample_id}_sorted_filtered.bam.bai"),  emit: bam
     tuple val(sample_id), path("*.log"), emit: log
     
     script:
 
     reads_args = null
-    library = null
-    
-    if (r2 == "NO") {
-        reads_args = "-U ${r1}"
-        library = "single-end"
-    } else {
+    filter_bedpe = null
+    lib = library.toString().toLowerCase()
+    if ( lib == "paired") {
         reads_args = "-1 ${r1} -2 ${r2}"
-        library = "paired-end"
+        filter_bedpe = "and proper_pair"
+    } else {
+        reads_args = "-U ${r1}"
+        filter_bedpe = ""
     }
 
-    // TODO: remove prefixes in script and use usual sam and bam, rename later in publishdir
-    
     """
-    echo "${sample_id}: ${library}" > library.txt
     module load bowtie2
     module load samtools
+
+    set -x
     bowtie2 -p $task.cpus -x $params.bowtie2_index $reads_args -S ${sample_id}_bowtie2.sam 2> ${sample_id}.bowtie2.log
-    samtools view -bS ${sample_id}_bowtie2.sam > ${sample_id}_alignments.bam
+    samtools view -@ $task.cpus -b ${sample_id}_bowtie2.sam > ${sample_id}_alignments.bam
     samtools sort -@ $task.cpus ${sample_id}_alignments.bam -o "sorted.bam"
     samtools index -@ $task.cpus "sorted.bam"
 
     rm -rf ${sample_id}_alignments.bam ${sample_id}_bowtie2.sam
-    
+
     ## removing blacklist regions from bam
     samtools view -@ $task.cpus -L ${anti_blacklist} -O BAM -o "${sample_id}_sorted.bam" sorted.bam
     samtools index -@ $task.cpus "${sample_id}_sorted.bam"
+
+    ## filtering from low quality, not mapped, not paired
+    sambamba view -h -t $task.cpus -f bam -F "[XS] == null and not unmapped ${filter_bedpe}" "${sample_id}_sorted.bam" > 1.bam
+    
+    sambamba sort -t $task.cpus 1.bam
+    mv 1.sorted.bam ${sample_id}_sorted_filtered.bam    
+    sambamba index ${sample_id}_sorted_filtered.bam
+
+    ## downsampling if it is required
+    if [[ "${downsample}" != "NO" ]]; then
+       mv ${sample_id}_sorted_filtered.bam 1.bam
+       mv ${sample_id}_sorted_filtered.bam.bai 1.bam.bai
+
+       ## ## remove symlinks 
+       ## rm ${sample_id}_sorted_filtered.bam
+       ## rm ${sample_id}_sorted_filtered.bam.bai
+
+       ## before downsampling sorting by name
+       sambamba sort -n -t $task.cpus 1.bam
+       samtools view -b -s ${downsample} 1.sorted.bam > tmp.bam
+
+       ## sorting back by coordinates
+       sambamba sort -t $task.cpus tmp.bam
+       mv tmp.sorted.bam ${sample_id}_sorted_filtered.bam
+       sambamba index ${sample_id}_sorted_filtered.bam
+    fi
+    
     """
 
     stub:
@@ -127,64 +161,53 @@ process bowtie2_align {
 process bam_count {
     tag "${sample_id}"
     
-    // echo true
+    // debug true
     cpus 4
     memory '32 GB'
-    // executor 'local'
-
+    
     beforeScript 'source $HOME/.bashrc'
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "*fragments*.bed*", overwrite: params.overwrite_outputs 
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
+
+    storeDir "${params.chipseq_bam_cache}/${sample_id}/bam_count/"
     
     input:
-    tuple val(sample_id), val(downsample), val(library), path(bam), path(bai)
+    tuple val(sample_id), val(lib), path(bam), path(bai)
     
     output:
     
     tuple val(sample_id), path("${sample_id}_fragments.bed"), emit: fragments
     tuple val(sample_id), path("${sample_id}_fragments_bed6.bed"), emit: fragments_bed6
-    tuple val(sample_id), val(library), path("${sample_id}_sorted_filtered.bam"), path("${sample_id}_sorted_filtered.bam.bai"), emit: final_bam
     tuple val(sample_id), path("*stats"), emit: stats
 
     script:
-    filter_bedpe=library == "paired-end" ? "and proper_pair" : ""
-    bedtools_bedpe=library == "paired-end" ? "-bedpe" : ""
+    bedtools_bedpe = lib == "paired" ? "-bedpe" : ""
+
     """
     module load bedtools
     module load samtools
     
-    #echo "LIBRARY: ${library}"
-    
-    sambamba view -h -t $task.cpus -f bam -F "[XS] == null and not unmapped ${filter_bedpe}" $bam > 1.bam
-    sambamba sort -n -t $task.cpus 1.bam
-
-    ## downsample if it is required
-    if [[ "${downsample}" != "NO" ]]; then
-        samtools view -b -s ${downsample} 1.sorted.bam > tmp.bam
-        mv tmp.bam 1.sorted.bam
-    fi
-
     ## extracting fragments
-    ## for single-end it will be read themselfs
     ## for paired-end (start1,end1 - start2,end2) it will be difference (start1,end2)
-    if [[ ${library} == "single-end" ]]; then
-        bedtools bamtobed ${bedtools_bedpe} -i 1.sorted.bam > ${sample_id}_fragments.bed 2> /dev/null
+    ## for single-end it will be the read itself
+    if [[ ${lib} == "paired" ]]; then
+
+        ## it is required to sort bam file by name for paired-end
+        ## bedtools does not work properly with coordinate sorted bam files
+        sambamba sort -n -t $task.cpus -o tmp.bam ${bam} 
+        bedtools bamtobed ${bedtools_bedpe} -i tmp.bam 2>/dev/null | cut -f 1,2,6 > ${sample_id}_fragments.bed
+        rm -rf tmp.bam
     else
-        bedtools bamtobed ${bedtools_bedpe} -i 1.sorted.bam | cut -f 1,2,6 > ${sample_id}_fragments.bed 2> /dev/null
+        bedtools bamtobed ${bedtools_bedpe} -i ${bam} 2>/dev/null > ${sample_id}_fragments.bed 2> /dev/null
     fi
 
     awk -v OFS='\t' '{print \$1,\$2,\$3,".","0","."}' ${sample_id}_fragments.bed > ${sample_id}_fragments_bed6.bed
 
-    #gzip ${sample_id}_fragments.bed
+    ## calc some stats
+    samtools stats -@ $task.cpus ${bam} > ${sample_id}_sorted_filtered.stats
+    samtools flagstats -@ $task.cpus ${bam} > ${sample_id}_sorted_filtered.flagstats
 
-    mv 1.sorted.bam 2.bam
-    sambamba sort -t $task.cpus 2.bam
-    mv 2.sorted.bam ${sample_id}_sorted_filtered.bam    
-    sambamba index ${sample_id}_sorted_filtered.bam
-
-    samtools stats ${sample_id}_sorted_filtered.bam > ${sample_id}_sorted_filtered.stats
-    samtools flagstats ${sample_id}_sorted_filtered.bam > ${sample_id}_sorted_filtered.flagstats
     """
     
     stub:
@@ -208,7 +231,9 @@ process macs2_callpeak {
     beforeScript 'source $HOME/.bashrc'
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/macs2/", mode: "copy", pattern: "*.{narrowPeak,broadPeak,xls,bed}", overwrite: true
-        
+
+    storeDir "${params.chipseq_bam_cache}/${sample_id}/macs2/"
+    
     executor 'sge'
     beforeScript 'source $HOME/.bashrc'
 
@@ -227,10 +252,10 @@ process macs2_callpeak {
 
 
     shell:
-    lib=library == "paired-end" ? "BAMPE" : "BAM"
+    lib=library == "paired" ? "BAMPE" : "BAM"
     model=params.macs2_model ? "" : "--nomodel"
     template 'macs2_callpeak.sh'
-
+ 
     stub:
     """
     touch ${sample_id}.narrowPeak
@@ -281,6 +306,7 @@ process fragments_union_overlap {
     cpus 1
     memory '8 GB'
     beforeScript 'source $HOME/.bashrc'
+    // cache false // TODO: remove
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/macs2/", mode: "copy", pattern: "${sample_id}_fragments_union_coverage.bed", overwrite: true
         
@@ -304,23 +330,21 @@ process calc_sample_stats {
     // cpus 1
     executor 'local'
     // echo true
+    
     input:
-    tuple val(sample_id), path(fragments), path(fragments_union_coverage), path(union)
+    tuple val(sample_id), path(fragments), path(fragments_union_coverage)
     
     output:
     path("${sample_id}_output.txt")
     script:
 
-    // ## FRAGMENT_COUNT=\$(grep 'in treatment:' $xls | awk '{print \$NF}') ## macs2
-    // ## FRAGMENT_COUNT=\$(grep -A 1 'Line count of fragments BED file:' *\${Sample_ID}'.o'* | awk 'FNR==2{print \$0}') ## sicer
-    // ## echo "${sample_id} - fr count: \${FRAGMENT_COUNT} - \${FRAGMENT_IN_PEAK_COUNT}"    
-    // ## echo "${sample_id},\${FRAGMENT_COUNT},\${FRAGMENT_IN_PEAK_COUNT},\${FRAGMENT_IN_PEAK_RATIO}" 
-
     """
     FRAGMENT_COUNT=\$(cat $fragments | wc -l )
     FRAGMENT_IN_PEAK_COUNT=\$(awk '{n+=\$4;} ; END {print n;}' ${fragments_union_coverage})
     FRAGMENT_IN_PEAK_RATIO=\$(echo "scale=4;\${FRAGMENT_IN_PEAK_COUNT}/\${FRAGMENT_COUNT}" | bc)
-    echo "${sample_id},\${FRAGMENT_COUNT},\${FRAGMENT_IN_PEAK_COUNT},\${FRAGMENT_IN_PEAK_RATIO}" > ${sample_id}_output.txt
+    echo "sample_id,nfragments,nfragments_in_peak,ratio" > ${sample_id}_output.txt
+
+    echo "${sample_id},\${FRAGMENT_COUNT},\${FRAGMENT_IN_PEAK_COUNT},\${FRAGMENT_IN_PEAK_RATIO}" >> ${sample_id}_output.txt
     """
     
     stub:
@@ -481,7 +505,9 @@ process epic2_callpeak {
     beforeScript 'source $HOME/.bashrc'
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/epic2/", mode: "copy", pattern: "*bed", overwrite: true
-        
+
+    storeDir "${params.chipseq_bam_cache}/${sample_id}/epic2/"
+    
     executor 'sge'
     beforeScript 'source $HOME/.bashrc'
 
@@ -520,34 +546,6 @@ process epic2_callpeak {
     bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${sample_id}_epic2.bb"
     """
 }
-
-// process read12_tester {
-//     executor 'local'
-//     echo true
-    
-//     input:
-//     tuple val(sample_id), val(r1), val(r2)
-
-//     output:
-//     stdout
-
-//     script:
-//     library = null
-//     if (r2 == "NO") {
-//         library = "single-end"
-//     } else {
-//         library = "paired-end"
-//     }
-//     // println(Objects.equals(r2, new String("NA")))
-//     // println(r2.class)
-//     // println(na.class)
-//     // println(r2)
-//     // println(na)
-//     """
-//     #echo $r2
-//     echo "library: $library"
-//     """
-// }
 
 process copy_files_to_server {
     executor 'local'
@@ -603,7 +601,7 @@ process collect_metrics {
         --OUTPUT ${sample_id}.CollectMultipleMetrics
 
     ## only for paired-end
-    if [[ $library == "paired-end" ]];
+    if [[ $library == "paired" ]];
     then
     picard \
         CollectInsertSizeMetrics \
@@ -622,7 +620,7 @@ process fastq_num_reads {
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: params.overwrite_outputs 
 
     input:
-    tuple val(sample_id), val(downsample), val(r1), val(r2)
+    tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
 
     output:
     tuple val(sample_id), path("*_raw_reads.txt") , emit: raw_reads
@@ -644,38 +642,48 @@ process fastqc {
     errorStrategy 'retry'
     maxRetries 3
     
+    // publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "symlink", overwrite: params.overwrite_outputs 
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "symlink", overwrite: params.overwrite_outputs 
+    storeDir "${params.chipseq_bam_cache}/${sample_id}/fastqc/"
+
     
     beforeScript 'source $HOME/.bashrc'
     
     // echo true
     input:
-    tuple val(sample_id), val(downsample), val(r1), val(r2)
+    tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
     
     output:
     tuple val(sample_id), path("*.html"), emit: html
     tuple val(sample_id), path("*.zip") , emit: zip
-
+    tuple val(sample_id), path("*_raw_reads.txt") , emit: raw_reads
+    
     script:
-    if (r2 == "NO") {
-        """
-        module load fastqc
-        mkdir -p ${sample_id}_out
-        ln -s $r1 ${sample_id}_1.fq.gz
-        fastqc -o ${sample_id}_out --threads $task.cpus ${sample_id}_1.fq.gz
-        mv ${sample_id}_out/* ./
-        """
-    } else {
-        """
-        module load fastqc
+    lib = library.toString().toLowerCase()
+
+    """
+    module load fastqc
+
+    if [[ "${lib}" == "paired" ]]; then
+        
         mkdir -p ${sample_id}_out
         ln -s $r1 ${sample_id}_1.fq.gz
         ln -s $r2 ${sample_id}_2.fq.gz
         fastqc --threads $task.cpus $r1 $r2
         fastqc -o ${sample_id}_out --threads $task.cpus ${sample_id}_1.fq.gz ${sample_id}_2.fq.gz
         mv ${sample_id}_out/* ./
-        """
-    }
+    else
+        mkdir -p ${sample_id}_out
+        ln -s $r1 ${sample_id}_1.fq.gz
+        fastqc -o ${sample_id}_out --threads $task.cpus ${sample_id}_1.fq.gz
+        mv ${sample_id}_out/* ./
+    fi
+
+    ## calculate number of raw reads
+    NUMREADS=`echo \$(zcat $r1 | wc -l)/4 | bc`
+    echo "sample_id,num_raw_reads" >> ${sample_id}_raw_reads.txt
+    echo "${sample_id},\${NUMREADS}" >> ${sample_id}_raw_reads.txt
+    """
 }
 
 process multiqc {
@@ -707,319 +715,57 @@ process multiqc {
     """
 }
 
-// process test1 {
-//     executor 'local'
-//     echo true
-
-//     input:
-//     val(arr)
-
-//     output:
-//     // path("result.txt")
-//     stdout
-//     script:
-//     def reports = arr.join(" ")
-    
-//     """
-//     echo $reports
-//     for x in ${reports}; do
-//         echo \$x
-//     done
-//     """
-// }
-
-process checkifempty {
-    executor "local"
-    echo true
-    input:
-    path(f)
-    output:
-    stdout
-
-    script:
-    println "In process: " + f.getClass()
-    """
-    echo "FILE: $f"
-    """
-    
-}
-
 def is_empty_file(fp) {
     File file = new File(fp);
     return !file.exists() || file.length() == 0
 }
 
-workflow {
-    // parse_configuration_xls(params.xlsx_config)
-    // parse_configuration_xls.out.sample_labels_config | view
-    // parse_configuration_xls.out.diffreps_config | view
-    // test = parse_configuration_xls.out.diffreps_config.ifEmpty(false)
-    // .ifEmpty{exit 1, "Cannot find any input RDS files for Module 3"}
+// Define the processes for cache operations
+process check_bam_cache {
 
-    fastq_config_ch = Channel.from(params.fastq_config)
-    sample_labels_config_ch = Channel.from(params.sample_labels_config)
-    diffreps_config_ch = Channel.from(params.diffreps_config)
-
-    // if (is_empty_file(params.diffreps_config.toString())) {
-    //     println(params.diffreps_config.toString())
-    //     println("File is empty")
-    // } else {
-    //     println("File is not empty")
-    // }
-
-    // parse_configuration_xls.out.diffreps_config.splitCsv() 
-    // parse_configuration_xls.out.fastq_config.splitCsv() | read12_tester
-    // checkifempty(parse_configuration_xls.out.diffreps_config)
-    // parse_configuration_xls.out.diffreps_config | view
-
-    // trim illumina adapters
-    if (params.trim_adapters) {
-        fastq_config_ch = trim_adapters_paired(fastq_config_ch.splitCsv())
-    } else {
-        fastq_config_ch = fastq_config_ch.splitCsv()
-    }    
-    
-    // Make QC analysis 
-    fastqc(fastq_config_ch)
-
-    // Calculate number of reads in fastq files 
-    // (required for downstream report)
-    fastq_num_reads(fastq_config_ch)
-
-    fq_num_reads = fastq_num_reads.out.raw_reads  
-        .map{it -> it[1]}
-        .collectFile(name: "numreads.csv", keepHeader: true)
-    
-    bowtie2_align(fastq_config_ch, mm9_black_complement)
-    
-    bam_count(bowtie2_align.output.bam)
-    
-    macs2_callpeak(bam_count.output.final_bam, mm9_chrom_sizes)
-    epic2_callpeak(bam_count.output.fragments_bed6, mm9_chrom_sizes)
-    
-    
-    //peak union (MACS2 / EPIC2(SICER))
-    if (params.peakcaller == "MACS2") {
-        peakcaller_bed_files = macs2_callpeak.out.narrow_bed
-            .map{it->it[1]}.collect()
-    } else {
-        peakcaller_bed_files = epic2_callpeak.out.bed3
-            .map{it->it[1]}.collect()
-    }
-
-    peak_union(peakcaller_bed_files)
-
-
-    //overlap peakcaller union and fragments files
-    fragments_union_overlap(bam_count.out.fragments, peak_union.out.union)
-
-    
-    peaks_for_stats_ch = bam_count.out.fragments
-        .join(fragments_union_overlap.out.fr_union_overlap)
-        .combine(peak_union.out.union)
-    
-    calc_sample_stats(peaks_for_stats_ch)
-    
-    sample_stats = calc_sample_stats.out
-        .collectFile{item -> item.text}
-
-    sample_stats | calc_norm_factors
-
-    // log.info("params.peakcaller: $params.peakcaller")
-
-    if (params.peakcaller == "MACS2") {
-        extra_columns = macs2_callpeak.out.xls // for diffreps summary
-        peaks_for_manorm2 = macs2_callpeak.out.narrow_bed
-        quality_control_peaks = macs2_callpeak.out.xls
-    } else {
-        extra_columns = epic2_callpeak.out.bed6 // for diffreps summary
-        peaks_for_manorm2 = epic2_callpeak.out.bed6
-        quality_control_peaks = epic2_callpeak.out.bed6
-    }
-
-    DIFFREPS(
-        // parse_configuration_xls.out.diffreps_config,
-        diffreps_config_ch,
-        // parse_configuration_xls.out.sample_labels_config,
-        sample_labels_config_ch,
-        bam_count.out.fragments_bed6,
-        calc_norm_factors.out,
-        extra_columns, //macs2_callpeak.out.xls
-        mm9_chrom_sizes,
-        fq_num_reads // table with number of reads in R1.fq files for each sample
-    )
-
-    MANORM2(
-        diffreps_config_ch,
-        bam_count.out.fragments,
-        peaks_for_manorm2,
-        mm9_chrom_sizes
-    )
-
-    QUALITY_PCA(
-        diffreps_config_ch,
-        quality_control_peaks,
-        params.peakcaller
-    )
-
-
-    // Aggregate DIFFREPS and MANORM2 reports for each INDIVIDUAL group separately
-    manorm2_group_report_ch = MANORM2.out.diff_table
-        .map{meta, rest -> [meta.group_name, rest]}
-    
-    diffreps_group_report_ch = DIFFREPS.out.full_report
-        .map{meta, rest -> [meta.group_name, rest]}
-        .groupTuple() 
-
-    combined_manorm2_diffreps_ch = diffreps_group_report_ch.join(manorm2_group_report_ch)
-    diffreps_manorm2_overlap(combined_manorm2_diffreps_ch)
-
-
-    // Aggregated report which contains all DIFFREPS and MANORM2 reports together
-    only_reports_ch  = DIFFREPS.out.full_report
-        .mix(MANORM2.out.diff_table)
-        .map{meta,rest -> rest}
-        .collect()
-        
-    diffreps_manorm2_overlap_general(only_reports_ch)
-
-    // Combine MAnorm2 and diffReps pdfs
-    COMBINE_HIST_PDF (
-        DIFFREPS.out.aggregated_histograms_diffreps_noxy,    
-        DIFFREPS.out.aggregated_histograms_diffreps_allchr,
-        MANORM2.out.manorm2_histogram_noxy,
-        MANORM2.out.manorm2_histogram_allchr
-    )
-  
-    // TRACKS (copying, generating track lines)
-    // create_bigwig_files 
-    sid_normfact_ch = calc_norm_factors.out.splitCsv(sep: "\t")
-        .map{it->[it[0],it[4]]}
-    
-    sid_fr_norm = bam_count.out.fragments
-        .join(sid_normfact_ch)
-
-    // Combine bigWig files for one group into one track
-    create_bigwig_files(sid_fr_norm, mm9_chrom_sizes)
-    bigwig_group_ch = sample_labels_config_ch
-        .splitCsv()
-        .join(create_bigwig_files.out)
-        .map{sid,n1,id1,n2,r,g,b,pth -> 
-             [n2, sid, "${r}__${g}__${b}", pth]
-        }
-        .groupTuple() 
-        .map{group_name, sids, colors, paths ->
-            def new_sids = sids.collect{it -> it.toString()}.sort().join("__") 
-            return [group_name, new_sids, colors[1], paths]
-        } 
-
-    combine_bigwig_tracks(bigwig_group_ch, mm9_chrom_sizes)
-    combined_bigwig_ch = combine_bigwig_tracks.out
-        .map{group_name,samples_str,color,pth -> [group_name, samples_str, color, pth.getName()]}
-        .collectFile{item -> item.join(",")+'\n'}    
-
-    // create track lines (sample specific)
-    sid_specific_ch = create_bigwig_files.out
-        .mix(macs2_callpeak.out.broad_bb)
-        .mix(macs2_callpeak.out.narrow_bb)
-        .mix(epic2_callpeak.out.epic2_bb)
-        //.mix(bam_count.out.final_bam.map{it->[it[0],it[2]]}) //excluded bam track lines
-        .map{it->[it[0], it[1].getName()]}
-        .collectFile{item -> item.join(",")+'\n'}
-        .combine(sample_labels_config_ch)
-
-    // create track lines (group specific)    
-    group_specific_ch = DIFFREPS.out.diffreps_track
-        .mix(MANORM2.out.manorm2_track)
-        .map{it->[it[0], it[2].getName()]}
-        .collectFile{item -> item.join(",")+'\n'}
-        .combine(diffreps_config_ch) 
-
-    create_sample_specific_tracks(sid_specific_ch)
-    create_diffreps_tracks(group_specific_ch)
-    create_group_combined_tracks(combined_bigwig_ch)
-
-    track_lines = Channel.from(default_tracks)
-        .concat(create_diffreps_tracks.out,create_sample_specific_tracks.out.sid_tracks)
-        .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text}
-
-    combined_bw_track_lines = Channel.from(default_tracks)
-        .concat(create_diffreps_tracks.out,create_group_combined_tracks.out)
-        .collectFile(name: 'autolimit_combined_tracks.txt', sort: 'index'){item -> item.text}
-
-    // copy bb,bam,bw files to server
-    bw_files = create_bigwig_files.out.map{it -> it[1]} 
-    narrow_files= macs2_callpeak.out.narrow_bb.map{it -> it[1]}
-    broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
-    broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
-    bam_files=bam_count.out.final_bam.map{it->[it[2],it[3]]}
-    diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]}
-    manorm2_files=MANORM2.out.manorm2_track.map{it->it[2]}
-    combined_bwfiles=combine_bigwig_tracks.out.map{it->it[3]} 
-
-    // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
-    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, manorm2_files, combined_bwfiles).collect()
-
-    if (params.copy_to_server_bool){
-        copy_files_to_server(track_files_to_server,
-                             track_lines,
-                             combined_bw_track_lines,
-                             create_sample_specific_tracks.out.bigwig_hub)
-    }
-
-    // calculate overlaps for all MACS2 narrow/broad and SICER peaks
-    // for each type of peaks create separate xlsx report
-    peaks_for_aggregation = macs2_callpeak.out.xls
-        .mix(macs2_callpeak.out.broad_xls)
-        .mix(epic2_callpeak.out.bed6)
-        .map{sid,bedfile -> bedfile}
-        .collect()
-
-    extradetailed_peaks_overlaps(peaks_for_aggregation, params.sample_labels_config)
-    
-    //picard
-    collect_metrics(bam_count.out.final_bam)
-    
-    multiqc(
-        fastqc.out.zip.map{it -> it[1]}.collect(),
-        bowtie2_align.out.log.map{it -> it[1]}.collect(),
-        bam_count.out.stats.map{it -> it[1]}.collect(),
-        macs2_callpeak.out.xls.map{it -> it[1]}.collect(),
-        collect_metrics.out.metrics.map{it -> it[1]}.collect()
-    )
-
-    multiqc.out.report 
-    // read12_tester
-
-    // log.info """\
-    //      --
-    // run as       : ${workflow.commandLine}
-    // user       : ${workflow.userName}
-         
-    //      config files : ${workflow.configFiles}
-         
-    //      """
-    //      .stripIndent()
-
-}
-
-process diffreps_manorm2_overlap {
-    tag "${group_name}"
-    executor 'local'
-    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_individual_reports_for_groups/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
-    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_top25/", mode: "copy", pattern: "*top25*.xlsx", overwrite: true
-    
-    beforeScript 'source $HOME/.bashrc'
+    executor "local"
+    // cache false
     input:
-    tuple val(group_name), path(diffreps_reports), path(manorm2_report)
+    tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
+    
     
     output:
-    tuple val(group_name), path("*.xlsx")
-
-    script:
+    tuple val(sample_id), val(library), val(downsample), val(r1), val(r2), val(exists)
+    
+    exec:
+    // Define the path to the cached BAM based on sample ID
+    def cachePath = "${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}_sorted_filtered.bam"
+    def cacheFile = new File(cachePath)
+    exists = cacheFile.exists()
+    
     """
-    module load R/${params.rversion}
-    diffreps_manorm2_overlap.R --output_prefix ${group_name}
+    echo "Checking cache for ${sample_id}: ${exists ? 'FOUND' : 'NOT FOUND'}"
+    """
+}
+
+process retrieve_cached_bams {
+
+    executor 'local'
+    // cache false
+    // debug true
+    input:
+    tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
+    
+    output:
+    tuple val(sample_id),
+        val(lib),
+        path("${sample_id}_sorted_filtered.bam"),
+        path("${sample_id}_sorted_filtered.bam.bai"),  emit: bam
+
+    tuple val(sample_id), path("${sample_id}.bowtie2.log"),  emit: log
+    
+    script:
+    lib = library.toString().toLowerCase()
+    
+    """
+    ln -s ${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}_sorted_filtered.bam .
+    ln -s ${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}_sorted_filtered.bam.bai .
+    ln -s ${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}.bowtie2.log .
     """
 }
 
@@ -1124,3 +870,296 @@ process combine_bigwig_tracks {
     wigToBigWig tmp.wig ${mm9_chrom_sizes} "${group_name}.bw"
     """
 }
+
+process diffreps_manorm2_overlap {
+    tag "${group_name}"
+    executor 'local'
+    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_individual_reports_for_groups/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_top25/", mode: "copy", pattern: "*top25*.xlsx", overwrite: true
+    
+    beforeScript 'source $HOME/.bashrc'
+    input:
+    tuple val(group_name), path(diffreps_reports), path(manorm2_report)
+    
+    output:
+    tuple val(group_name), path("*.xlsx")
+
+    script:
+    """
+    module load R/${params.rversion}
+    diffreps_manorm2_overlap.R --output_prefix ${group_name}
+    """
+}
+
+// process cache_bams {
+
+//     executor 'local'
+//     publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}_sorted_filtered.bam*", overwrite: false
+
+//     input:
+//     tuple val(sample_id), val(library), path(bam), path(bai)
+    
+//     output:
+//     tuple val(sample_id), path("${sample_id}_sorted_filtered.bam"), path("${sample_id}_sorted_filtered.bam.bai"),  emit: bam
+    
+//     script:
+//     """
+//     cp ${bam} ${sample_id}_sorted_filtered.bam
+//     cp ${bai} ${sample_id}_sorted_filtered.bam.bai
+//     """
+// }
+
+workflow {
+    // parse_configuration_xls(params.xlsx_config)
+    // parse_configuration_xls.out.sample_labels_config | view
+    // parse_configuration_xls.out.diffreps_config | view
+    // test = parse_configuration_xls.out.diffreps_config.ifEmpty(false)
+    // .ifEmpty{exit 1, "Cannot find any input RDS files for Module 3"}
+
+    fastq_config_ch = Channel.from(params.fastq_config)
+    sample_labels_config_ch = Channel.from(params.sample_labels_config)
+    diffreps_config_ch = Channel.from(params.diffreps_config)
+
+    // [sid, library, downsample, r1, r2]
+    fastq_records = fastq_config_ch.splitCsv()
+
+    // [sid, library, downsample, r1, r2, cached:true|false]
+    // add "cached" column
+    cached_bams = check_bam_cache(fastq_records)
+
+    // split bams by cached and not cached
+    bam_cache_status = cached_bams.branch {
+        cached: it[5] == true
+        uncached: it[5] == false
+    }
+
+    // Process only uncached samples through the trimming step
+    // TODO: revised step, I suppose we are going to use only trimmed fastq files, see below
+    // if (params.trim_adapters) {
+    //     fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]})
+    // } else {
+    //     fastq_for_mapping = bam_cache_status.uncached.map{it -> it[0..4]}
+    // }
+
+    fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]}) | view
+    
+    // Make QC analysis (only for uncached, it will work because of storeDir)
+    fastqc(fastq_records)
+
+    // Calculate number of reads in fastq files  (only for uncached)
+    // (required for downstream report)
+    // fastq_num_reads(fastq_for_mapping)
+
+    fq_num_reads = fastqc.out.raw_reads  
+        .map{it -> it[1]}
+        .collectFile(name: "numreads.csv", keepHeader: true)
+        
+    bowtie2_align(fastq_for_mapping, mm9_black_complement)
+
+    // TODO: make caching optional because for public data probably it will not
+    // be required to cache bam files
+    // if (params.need_cache) {
+    //     cache_bams(bowtie2_align.out.bam)
+    // } 
+    
+    // Combine newly generated BAMs with cached BAMs
+    retrieve_cached_bams(bam_cache_status.cached.map { it[0..4] })
+    all_bams = bowtie2_align.output.bam.mix(retrieve_cached_bams.out.bam)
+    all_bowtie2_logs = bowtie2_align.output.log.mix(retrieve_cached_bams.out.log)
+    
+    bam_count(all_bams)
+    
+    macs2_callpeak(all_bams, mm9_chrom_sizes)
+    epic2_callpeak(bam_count.out.fragments_bed6, mm9_chrom_sizes)
+    
+    //peak union (MACS2 / EPIC2(SICER))
+    if (params.peakcaller == "MACS2") {
+        peakcaller_bed_files = macs2_callpeak.out.narrow_bed
+            .map{it->it[1]}.collect()
+    } else {
+        peakcaller_bed_files = epic2_callpeak.out.bed3
+            .map{it->it[1]}.collect()
+    }
+
+    peak_union(peakcaller_bed_files)
+
+    //overlap peakcaller union and fragments files
+    fragments_union_overlap(bam_count.out.fragments, peak_union.out.union)
+
+    // TODO: need to remove .combine(union) because we do not use it
+    peaks_for_stats_ch = bam_count.out.fragments
+        .join(fragments_union_overlap.out.fr_union_overlap)
+    
+    calc_sample_stats(peaks_for_stats_ch)
+    
+    sample_stats = calc_sample_stats.out
+        .collectFile(name: "file.csv", keepHeader: true)
+        // .collectFile{item -> item.text, keepHeader: true}
+    sample_stats | calc_norm_factors
+
+    // log.info("params.peakcaller: $params.peakcaller")
+
+    if (params.peakcaller == "MACS2") {
+        extra_columns = macs2_callpeak.out.xls // for diffreps summary
+        peaks_for_manorm2 = macs2_callpeak.out.narrow_bed
+        quality_control_peaks = macs2_callpeak.out.xls
+    } else {
+        extra_columns = epic2_callpeak.out.bed6 // for diffreps summary
+        peaks_for_manorm2 = epic2_callpeak.out.bed6
+        quality_control_peaks = epic2_callpeak.out.bed6
+    }
+
+    DIFFREPS(
+        // parse_configuration_xls.out.diffreps_config,
+        diffreps_config_ch,
+        // parse_configuration_xls.out.sample_labels_config,
+        sample_labels_config_ch,
+        bam_count.out.fragments_bed6,
+        calc_norm_factors.out,
+        extra_columns, //macs2_callpeak.out.xls
+        mm9_chrom_sizes,
+        fq_num_reads // table with number of reads in R1.fq files for each sample
+    )
+
+    MANORM2(
+        diffreps_config_ch,
+        bam_count.out.fragments,
+        peaks_for_manorm2,
+        mm9_chrom_sizes
+    )
+    
+    QUALITY_PCA(
+        diffreps_config_ch,
+        quality_control_peaks,
+        params.peakcaller
+    )
+
+
+    // Aggregate DIFFREPS and MANORM2 reports for each INDIVIDUAL group separately
+    manorm2_group_report_ch = MANORM2.out.diff_table
+        .map{meta, rest -> [meta.group_name, rest]}
+    
+    diffreps_group_report_ch = DIFFREPS.out.full_report
+        .map{meta, rest -> [meta.group_name, rest]}
+        .groupTuple() 
+
+    combined_manorm2_diffreps_ch = diffreps_group_report_ch.join(manorm2_group_report_ch)
+    diffreps_manorm2_overlap(combined_manorm2_diffreps_ch)
+
+
+    // Aggregated report which contains all DIFFREPS and MANORM2 reports together
+    only_reports_ch  = DIFFREPS.out.full_report
+        .mix(MANORM2.out.diff_table)
+        .map{meta,rest -> rest}
+        .collect()
+        
+    diffreps_manorm2_overlap_general(only_reports_ch)
+
+    // Combine MAnorm2 and diffReps pdfs
+    COMBINE_HIST_PDF (
+        DIFFREPS.out.aggregated_histograms_diffreps_noxy,    
+        DIFFREPS.out.aggregated_histograms_diffreps_allchr,
+        MANORM2.out.manorm2_histogram_noxy,
+        MANORM2.out.manorm2_histogram_allchr
+    )
+  
+    // TRACKS (copying, generating track lines)
+    // create_bigwig_files 
+    sid_normfact_ch = calc_norm_factors.out.splitCsv(sep: "\t")
+        .map{it->[it[0],it[4]]}
+    
+    sid_fr_norm = bam_count.out.fragments
+        .join(sid_normfact_ch)
+
+    // Combine bigWig files for one group into one track
+    create_bigwig_files(sid_fr_norm, mm9_chrom_sizes)
+    bigwig_group_ch = sample_labels_config_ch
+        .splitCsv()
+        .join(create_bigwig_files.out)
+        .map{sid,n1,id1,n2,r,g,b,pth -> 
+             [n2, sid, "${r}__${g}__${b}", pth]
+        }
+        .groupTuple() 
+        .map{group_name, sids, colors, paths ->
+            def new_sids = sids.collect{it -> it.toString()}.sort().join("__") 
+            return [group_name, new_sids, colors[1], paths]
+        } 
+
+    combine_bigwig_tracks(bigwig_group_ch, mm9_chrom_sizes)
+    combined_bigwig_ch = combine_bigwig_tracks.out
+        .map{group_name,samples_str,color,pth -> [group_name, samples_str, color, pth.getName()]}
+        .collectFile{item -> item.join(",")+'\n'}    
+
+    // create track lines (sample specific)
+    sid_specific_ch = create_bigwig_files.out
+        .mix(macs2_callpeak.out.broad_bb)
+        .mix(macs2_callpeak.out.narrow_bb)
+        .mix(epic2_callpeak.out.epic2_bb)
+        //.mix(bam_count.out.final_bam.map{it->[it[0],it[2]]}) //excluded bam track lines
+        .map{it->[it[0], it[1].getName()]}
+        .collectFile{item -> item.join(",")+'\n'}
+        .combine(sample_labels_config_ch)
+
+    // create track lines (group specific)    
+    group_specific_ch = DIFFREPS.out.diffreps_track
+        .mix(MANORM2.out.manorm2_track)
+        .map{it->[it[0], it[2].getName()]}
+        .collectFile{item -> item.join(",")+'\n'}
+        .combine(diffreps_config_ch) 
+
+    create_sample_specific_tracks(sid_specific_ch)
+    create_diffreps_tracks(group_specific_ch)
+    create_group_combined_tracks(combined_bigwig_ch)
+
+    track_lines = Channel.from(default_tracks)
+        .concat(create_diffreps_tracks.out,create_sample_specific_tracks.out.sid_tracks)
+        .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text}
+
+    combined_bw_track_lines = Channel.from(default_tracks)
+        .concat(create_diffreps_tracks.out,create_group_combined_tracks.out)
+        .collectFile(name: 'autolimit_combined_tracks.txt', sort: 'index'){item -> item.text}
+
+    // copy bb,bam,bw files to server
+    bw_files = create_bigwig_files.out.map{it -> it[1]} 
+    narrow_files= macs2_callpeak.out.narrow_bb.map{it -> it[1]}
+    broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
+    broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
+    bam_files=all_bams.map{it->[it[2],it[3]]}
+    diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]}
+    manorm2_files=MANORM2.out.manorm2_track.map{it->it[2]}
+    combined_bwfiles=combine_bigwig_tracks.out.map{it->it[3]} 
+
+    // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
+    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, manorm2_files, combined_bwfiles).collect()
+
+    if (params.copy_to_server_bool){
+        copy_files_to_server(track_files_to_server,
+                             track_lines,
+                             combined_bw_track_lines,
+                             create_sample_specific_tracks.out.bigwig_hub)
+    }
+
+    // calculate overlaps for all MACS2 narrow/broad and SICER peaks
+    // for each type of peaks create separate xlsx report
+    peaks_for_aggregation = macs2_callpeak.out.xls
+        .mix(macs2_callpeak.out.broad_xls)
+        .mix(epic2_callpeak.out.bed6)
+        .map{sid,bedfile -> bedfile}
+        .collect()
+
+    extradetailed_peaks_overlaps(peaks_for_aggregation, params.sample_labels_config)
+    
+    //picard
+    collect_metrics(all_bams)
+    
+    multiqc(
+        fastqc.out.zip.map{it -> it[1]}.collect(),
+        all_bowtie2_logs.map{it -> it[1]}.collect(),
+        bam_count.out.stats.map{it -> it[1]}.collect(),
+        macs2_callpeak.out.xls.map{it -> it[1]}.collect(),
+        collect_metrics.out.metrics.map{it -> it[1]}.collect()
+    )
+
+    multiqc.out.report
+}
+
