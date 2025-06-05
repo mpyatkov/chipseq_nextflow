@@ -62,6 +62,7 @@ process trim_adapters {
 
         trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 $r1 -j 4 --basename ${sample_id}
         # create dummy file for output consistency
+        mv ${sample_id}_trimmed.fq.gz ${sample_id}_val_1.fq.gz
         touch ${sample_id}_val_2.fq.gz
         """
     }
@@ -847,9 +848,9 @@ process combine_bigwig_tracks {
     tag "${group_name}"
 
     executor 'sge'
-    cpus 1
-    memory '8 GB'
-    time '1h'
+    cpus 8
+    memory '16 GB'
+    time '2h'
 
     beforeScript 'source $HOME/.bashrc'
     // echo true
@@ -865,9 +866,8 @@ process combine_bigwig_tracks {
     """
     ## for wiggletools
     module load miniconda
-    conda activate /projectnb/wax-es/routines/condaenv/wig
-    wiggletools mean *.bw > tmp.wig
-    wigToBigWig tmp.wig ${mm9_chrom_sizes} "${group_name}.bw"
+    conda activate /projectnb/wax-es/routines/condaenv/deeptools
+    bigwigAverage -p $task.cpus -b *.bw -o "${group_name}.bw"
     """
 }
 
@@ -941,7 +941,7 @@ workflow {
     //     fastq_for_mapping = bam_cache_status.uncached.map{it -> it[0..4]}
     // }
 
-    fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]}) | view
+    fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]}) 
     
     // Make QC analysis (only for uncached, it will work because of storeDir)
     fastqc(fastq_records)
