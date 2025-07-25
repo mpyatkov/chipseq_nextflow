@@ -53,16 +53,18 @@ module load "R/${RVERSION}"
 
 for session in "$@"; do
     for top25file in $(find ${TOP25DIR_PATH} -name "*top25*.xlsx"); do
-        # echo "processing $top25file"
         fname=$(basename $top25file)
         qsub -j y -o "${fname}.log" -N "UCSC_${fname}" download.qsub ${session} ${top25file} ${RVERSION}
     done
+    echo "Starting jobs for session: ${session}..."
+    echo "Please wait until all downloads are complete..."
+    wait_for_jobs "UCSC"
 done
 
 ## Wait until all jobs will be complete
-echo "You can check current status of jobs using qstat -u $USER | grep UCSC"
-echo "Please wait until all downloads are complete..."
-wait_for_jobs "UCSC"
+# echo "You can check current status of jobs using qstat -u $USER | grep UCSC"
+# echo "Please wait until all downloads are complete..."
+# wait_for_jobs "UCSC"
 
 ## Check if some log files does not contain IAMOK as the last line
 ## which means something happen during download

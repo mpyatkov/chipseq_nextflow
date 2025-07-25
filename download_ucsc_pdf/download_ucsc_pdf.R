@@ -191,7 +191,7 @@ for (i in 1:n) {
   # Increment the progress bar, and update the detail text.
   correct_url <- paste0(init_params$main_url, as.character(bed[i, 1]))
   download_pdf(init_params$session, correct_url, as.character(bed[i, 2]))
-  Sys.sleep(2)
+  Sys.sleep(3)
 }
 
 
