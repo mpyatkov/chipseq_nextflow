@@ -944,7 +944,8 @@ workflow {
     fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]}) 
     
     // Make QC analysis (only for uncached, it will work because of storeDir)
-    fastqc(fastq_records)
+    // fastqc(fastq_records)  
+    fastqc(fastq_for_mapping) // calculate fastqc only for new samples with trimmed adapters 
 
     // Calculate number of reads in fastq files  (only for uncached)
     // (required for downstream report)
