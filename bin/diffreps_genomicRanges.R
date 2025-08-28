@@ -24,7 +24,8 @@ ParseArguments <- function() {
   p <- add_argument(p, '--treatment_samples', default = "", help = "Treatment samples (ex. G215M1,G215M2)")
   p <- add_argument(p, '--control_samples', default = "", help = "Control samples (ex. G215M3,G215M4)")
   p <- add_argument(p, '--exp_number', default = "00", help = "Experiment number, need only for output report name")
-  
+  p <- add_argument(p, '--mumerge_path', help = "Path to MuMerge file which will be used instead of MACS2 union")
+
   return(parse_args(p))
 }
 
@@ -55,6 +56,7 @@ CONTROL_NAME <- argv$control_name
 TREATMENT_NAME <- argv$treatment_name
 
 peak_caller <- argv$peak_caller
+peak_caller_title <- ifelse(is.na(argv$mumerge_path), peak_caller, str_glue("{peak_caller}(MUMERGE)"))
 histone_mark <- argv$histone_mark
 normalization_caller <- argv$normalization_caller
 treatment_samples <- argv$treatment_samples %>% str_replace_all(., "\\|",",")
@@ -107,7 +109,7 @@ collapse_sample_names <- function(sample_string) {
 short_treatment_names <- collapse_sample_names(treatment_samples)
 short_control_names <- collapse_sample_names(control_samples)
 
-top_header <- str_glue("{histone_mark}, {peak_caller}, normalization: {normalization_caller}\n",
+top_header <- str_glue("{histone_mark}, {peak_caller_title}, normalization: {normalization_caller}\n",
                        "Treatment: {treatment_samples} Control: {control_samples}\n")
 
 
@@ -149,22 +151,30 @@ peakcaller_xls <- if (peak_caller == "MACS2") {
 }
 
 ## MACS2/SICER merging peaks
-peakcaller_union  <- if (peak_caller == "MACS2") {
-  peakcaller_xls %>% 
-    as_tibble() %>% 
-    select(seqnames,start,end,peak_id) %>% 
-    as_granges() %>% 
-    GenomicRanges::reduce(., min.gapwidth = 0L) %>% 
-    plyranges::mutate(peakcaller_overlap = 1)
-} else {
-  ## SICER does not have peak_id
-  peakcaller_xls %>% 
-    as_tibble() %>% 
-    select(seqnames,start,end) %>% 
-    as_granges() %>% 
-    GenomicRanges::reduce(., min.gapwidth = 0L) %>% 
-    plyranges::mutate(peakcaller_overlap = 1)
+peakcaller_union <- if (is.na(argv$mumerge_path)) {
+  if (peak_caller == "MACS2") {
+    peakcaller_xls %>%
+      as_tibble() %>%
+      select(seqnames,start,end) %>%
+      as_granges() %>%
+      GenomicRanges::reduce(., min.gapwidth = 0L) %>%
+      plyranges::mutate(peakcaller_overlap = 1)
+  } else {
+    ## SICER does not have peak_id
+    peakcaller_xls %>%
+      as_tibble() %>%
+      select(seqnames,start,end) %>%
+      as_granges() %>%
+      GenomicRanges::reduce(., min.gapwidth = 0L) %>%
+      plyranges::mutate(peakcaller_overlap = 1)
   }
+} else {
+  ## using mumerge
+  read_tsv(argv$mumerge_path, col_names = F) %>%
+    select(seqnames = X1, start = X2, end = X3) %>%
+    as_granges() %>%
+    plyranges::mutate(peakcaller_overlap = 1)
+}
 
 ######## load diffReps output annotated or "with header" files
 gr.annotated <- read_tsv(annotated_path, col_names = T, comment = "#") %>% 
@@ -324,7 +334,7 @@ unfiltered_fdrplot <- fdrs_plot(FDRs,
                                 peakcaller_overlap = F, 
                                 extra_title = unfiltered_fdrplot_title)
 
-filtered_fdrplot_title <- str_glue("{peak_caller} filtered {TREATMENT_NAME}/{CONTROL_NAME}.\nEffect of FDR cutoff on number condition-specific sites\n",
+filtered_fdrplot_title <- str_glue("{peak_caller_title} filtered {TREATMENT_NAME}/{CONTROL_NAME}.\nEffect of FDR cutoff on number condition-specific sites\n",
                                     "Filtering options: |log2FC| > {log2fc_cutoff}, avg.count > {min_avg_count}\n")
 filtered_fdrplot <- fdrs_plot(FDRs, 
                               gr.ann.noblack.extra, 
@@ -395,7 +405,7 @@ hist_unfiltered <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
                                   title_extra = title_unfiltered,
                                   filter_xy_chromosomes = F)
 
-title_filtered = str_glue("{peak_caller} filtered {TREATMENT_NAME} / {CONTROL_NAME} (all chromosomes).\nFold Change for diffReps condition-specific sites\n",
+title_filtered = str_glue("{peak_caller_title} filtered {TREATMENT_NAME} / {CONTROL_NAME} (all chromosomes).\nFold Change for diffReps condition-specific sites\n",
                           "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                           "Weakest sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                           "Low read sites: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count < {min_avg_count}\n")
@@ -422,7 +432,7 @@ hist_unfiltered_noXY <- plot_histogram(gr.ann.noblack.extra %>% as_tibble(),
                                   title_extra = title_unfiltered_noXY,
                                   filter_xy_chromosomes = T)
 
-title_filtered_noXY = str_glue("{peak_caller} filtered {TREATMENT_NAME} / {CONTROL_NAME} (without X and Y chrom).\nFold Change for diffReps condition-specific sites\n",
+title_filtered_noXY = str_glue("{peak_caller_title} filtered {TREATMENT_NAME} / {CONTROL_NAME} (without X and Y chrom).\nFold Change for diffReps condition-specific sites\n",
                           "Significant sites filters: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                           "Weakest sites filters: |log2FC| <= {log2fc_cutoff}, padj < 0.05, avg.count > {min_avg_count}\n",
                           "Low read sites: |log2FC| > {log2fc_cutoff}, padj < 0.05, avg.count < {min_avg_count}\n")
@@ -513,7 +523,7 @@ filt_df.up_feature <- gr.ann.noblack.extra %>%
   count(Feature = factor(Feature)) %>% 
   mutate(pct = prop.table(n))
 
-title <- str_glue("{peak_caller} filtered Feature Distribution of\n{TREATMENT_NAME} Sites ({sum(filt_df.up_feature$n)})")
+title <- str_glue("{peak_caller_title} filtered Feature Distribution of\n{TREATMENT_NAME} Sites ({sum(filt_df.up_feature$n)})")
 filtered_up_barchart <- barchart_feature(feature_colors, filt_df.up_feature, title = title)
 
 filt_df.down_feature <- gr.ann.noblack.extra %>% 
@@ -522,7 +532,7 @@ filt_df.down_feature <- gr.ann.noblack.extra %>%
   count(Feature = factor(Feature)) %>% 
   mutate(pct = prop.table(n))
 
-title <- str_glue("{peak_caller} filtered Feature Distribution of\n{CONTROL_NAME} Sites ({sum(filt_df.down_feature$n)})")
+title <- str_glue("{peak_caller_title} filtered Feature Distribution of\n{CONTROL_NAME} Sites ({sum(filt_df.down_feature$n)})")
 filtered_down_barchart <- barchart_feature(feature_colors, filt_df.down_feature, title = title)
 
 #final_plot <- list(up_barchart, down_barchart) %>% keep(\(x) is.ggplot(x)) %>% purrr::reduce(`+`)
@@ -683,7 +693,7 @@ filtered_xls <- join_overlap_left(gr.ann.noblack.extra %>% filter(peakcaller_ove
 
 sheet_name <- str_glue("{peak_caller}_filtered_sites")
 addWorksheet(wb, sheetName = sheet_name)
-writeData(wb, sheet = sheet_name, str_glue("{peak_caller} filtered sites: {TREATMENT_NAME} (treatment)/{CONTROL_NAME} (control)"), startRow = 1, startCol = 1, colNames = FALSE)
+writeData(wb, sheet = sheet_name, str_glue("{peak_caller_title} filtered sites: {TREATMENT_NAME} (treatment)/{CONTROL_NAME} (control)"), startRow = 1, startCol = 1, colNames = FALSE)
 writeData(wb, sheet = sheet_name, str_glue("Default thresholds (used to define only significant sites): |log2FC| > {log2fc_cutoff}, padj < 0.05, max(avg.count) > {min_avg_count}"), startRow = 2, startCol = 1, colNames = FALSE)
 writeData(wb, sheet = sheet_name, str_glue("CONTROL/TREATMENT thresholds: |log2FC| > {log2fc_cutoff}, padj < 0.05, Control.avg/Treatment.avg > {min_avg_count}"), startRow = 3, startCol = 1, colNames = FALSE)
 writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_samples}, CONTROL samples: {control_samples}"), startRow = 4, startCol = 1, colNames = FALSE)

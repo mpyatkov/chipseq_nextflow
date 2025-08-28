@@ -13,6 +13,7 @@ output_dir="!{output_dir}"
 PEAKCALLER="!{peakcaller}"
 DATASET_LABEL="!{dataset_label}"
 SAMPLE_LABELS="!{SAMPLE_LABELS}"
+MUMERGE="!{MUMERGE}"
 
 mm9_chrom_sizes="!{mm9_chrom_sizes}"
 
@@ -41,7 +42,8 @@ module load bedtools
                  --normalization_caller "${NORMALIZATION}_${WINDOW_SIZE}" \
                  --treatment_samples ${TREATMENT_SAMPLES}  \
                  --control_samples ${CONTROL_SAMPLES} \
-                 --exp_number ${NUM})
+                 --exp_number ${NUM} \
+                 --mumerge_path ${MUMERGE})
 
 mkdir -p plots && cp *.pdf ./plots
 mkdir -p fullreport && cp *.xlsx ./fullreport

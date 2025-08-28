@@ -49,7 +49,7 @@ process diffreps_summary {
     publishDir path: "${params.output_dir}/diffreps_output/${meta.group_name}/", mode: "copy", pattern: "${output_dir}/*", overwrite: true
     
     input:
-    tuple val(meta), path(diffout), path(xls), path(SAMPLE_LABELS)
+    tuple val(meta), path(diffout), path(xls), path(SAMPLE_LABELS), path(MUMERGE)
     path(mm9_chrom_sizes)
     
     output:
@@ -68,6 +68,26 @@ process diffreps_summary {
     
     template 'diffreps_summary.sh'
 }
+
+process mumerge {
+    tag "${group_name}"
+    cpus 8
+    beforeScript 'source $HOME/.bashrc'    
+    publishDir path: "${params.output_dir}/mumerge_output/", mode: "copy", pattern: "${group_name}_mumerge.bed", overwrite: true
+
+    input:
+    tuple val(group_name), path("*")
+
+    output:
+    tuple val(group_name), path("${group_name}_mumerge.bed")
+
+    script:
+    """
+    module load R/${params.rversion}
+    run_mumerge.R --files_path ./ --pattern "xls" --ncores $task.cpus --output_file "${group_name}_mumerge.bed"
+    """
+}
+
 
 process aggregate_diffreps_pdf {
     tag("${group_name}")
@@ -154,7 +174,7 @@ workflow DIFFREPS {
     diffreps_params_withnorm = diffreps_params.combine(norm_factors)
     diffreps_params_withnorm | diffreps
 
-    dsummary_ch = diffreps_params.map{it -> it[0..-3]} // exclude bed6 files
+    prelim_ch = diffreps_params.map{it -> it[0..-3]} // exclude bed6 files
         .join(diffreps.out)
         .combine(peakcaller_xls
                  .map{it -> it[1]}.collect().toSortedList())
@@ -162,7 +182,21 @@ workflow DIFFREPS {
             //filter xls only participating in comparison
             def new_xls = xls.findAll{it =~ "${meta.treatment_samples}|${meta.control_samples}"} 
             return [meta, diffout, new_xls]}
-        .combine(sample_labels_config)
+        .combine(sample_labels_config) 
+
+    mumerge_ch = prelim_ch
+        .map{meta,diffout,xls,sample_labels_config ->
+            [meta.group_name, xls]}
+        .groupTuple()
+        .map{group_name,xls -> [group_name, xls[0]]} 
+
+    mumerge_ch | mumerge 
+
+    dsummary_ch = prelim_ch
+        .map{meta,diffout,xls,config ->
+            [meta.group_name,meta,diffout,xls,config]} 
+        .combine(mumerge.out, by: 0) 
+        .map{g,m,d,x,c,mu -> [m,d,x,c,mu]}
 
     diffreps_summary(dsummary_ch, mm9_chrom_sizes)
     
