@@ -47,6 +47,7 @@ module load bedtools
 
 mkdir -p plots && cp *.pdf ./plots
 mkdir -p fullreport && cp *.xlsx ./fullreport
+cp *MUMERGE*.csv ./fullreport
 mkdir -p ucsc_tracks && cp *.bed ./ucsc_tracks
 
 # ignore chrM,random and header

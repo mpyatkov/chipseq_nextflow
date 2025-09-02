@@ -69,31 +69,24 @@ swap_colors <- TRUE
 DEBUG <- FALSE
 
 if (DEBUG){
-  setwd("/projectnb/wax-dk/max/exp_diffreps_genomicRanges/")
-  ## input params
-  # annotated_path <- "/projectnb2/wax-dk/max/G207_SG_CHIPSEQ_K27ac/Scripts/10_diffReps_1/Output_diffReps_1.diffreps_normalization.w1000/diffReps_Female_Control.vs.Male_Treatment.annotated"
-  # hotspot_path <- "/projectnb2/wax-dk/max/G207_SG_CHIPSEQ_K27ac/Scripts/10_diffReps_1/Output_diffReps_1.diffreps_normalization.w1000/diffReps_Female_Control.vs.Male_Treatment.hotspot"
-  # blmm9_path <- "/projectnb/wax-dk/max/G215_k4me1_k27ac_k9ac/Scripts/10_diffreps_G215K27ac_Male_vs_G215K27ac_Female_RIPPM_3/Job_Scripts/ENCODE_Blacklist/mm9-blacklist.bed.gz"
-  # macs2_xls_dir_path <- "/projectnb/wax-dk/max/G207_SG_CHIPSEQ_K27ac/Scripts/10_diffReps_1/Output_diffReps_1.diffreps_normalization.w1000/XLSfiles"
-  # sample_labels_path <- "/projectnb/wax-dk/max/G207_SG_CHIPSEQ_K27ac/Scripts/00_Setup_Pipeline/Sample_Labels.txt"
-  
-  main_path <- "/projectnb2/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/work/9f/d635e5be5219b694578e9b59f0e849/"
-  annotated_path <- str_glue("{main_path}/diffReps_Male_8wk_H3K27ac.vs.Male_3wk_H3K27ac_DIFFREPS_1000.annotated")
-  hotspot_path <- str_glue("{main_path}/diffReps_Male_8wk_H3K27ac.vs.Male_3wk_H3K27ac_DIFFREPS_1000.hotspot")
+  main_path <- "/projectnb/wax-dk/max/G242_G241_G228_DAR_ATAC/work/cc/bdfa7b628e7d5a9a3fcbcc4c4b23c3/"
+  annotated_path <- str_glue("{main_path}/diffReps_Male_8wk_ATAC.vs.Female_8wk_ATAC_DIFFREPS_200.annotated")
+  hotspot_path <- str_glue("{main_path}/diffReps_Male_8wk_ATAC.vs.Female_8wk_ATAC_DIFFREPS_200.hotspot")
   blmm9_path <- "default"
   macs2_xls_dir_path <- str_glue("{main_path}/XLSfiles")
   sample_labels_path <- str_glue("{main_path}/sample_labels.csv")
+  argv$mumerge_path <- str_glue("{main_path}/Male_8wk_ATAC_vs_Female_8wk_ATAC_mumerge.bed")
   
   peak_caller <- "MACS2"
   min_avg_count <- 20
   log2fc_cutoff <- 1
   CONTROL_NAME <- "Female"
   TREATMENT_NAME <- "Male"
-  
-  histone_mark <- "G207_K27ac"
+
+  histone_mark <- "G242_ATAC"
   normalization_caller <- "DIFFREPS"
-  treatment_samples <- "G207M1,G207M2"
-  control_samples <- "G207M3,G207M4"
+  treatment_samples <- "G241_M22|G241_M23|G228_M05|G228_M03"
+  control_samples <- "G241_M45|G228_M04|G228_M06|G241_M46"
 }
 
 ## "G215M1,G215M2" --> "G215M1M2"
@@ -170,6 +163,7 @@ peakcaller_union <- if (is.na(argv$mumerge_path)) {
   }
 } else {
   ## using mumerge
+  print("Using mumerge...")
   read_tsv(argv$mumerge_path, col_names = F) %>%
     select(seqnames = X1, start = X2, end = X3) %>%
     as_granges() %>%
@@ -691,6 +685,16 @@ filtered_xls <- join_overlap_left(gr.ann.noblack.extra %>% filter(peakcaller_ove
              "How many samples overlap with this region"), 
            .before = seqnames)
 
+## ------- mumerge orientied regions -------
+mumerge_regions <- join_overlap_left(peakcaller_union, 
+                                     gr.ann.noblack.extra %>% 
+                                       filter(peakcaller_overlap == 1) %>% 
+                                       mutate(diffreps_seqnames = seqnames, diffreps_start = start, diffreps_end  = end)) %>% 
+  as_tibble() %>% 
+  filter(!is.na(Length)) %>% 
+  filter(padj == min(padj), .by = c(seqnames,start,end)) 
+
+## ---write reports to xlsx ----
 sheet_name <- str_glue("{peak_caller}_filtered_sites")
 addWorksheet(wb, sheetName = sheet_name)
 writeData(wb, sheet = sheet_name, str_glue("{peak_caller_title} filtered sites: {TREATMENT_NAME} (treatment)/{CONTROL_NAME} (control)"), startRow = 1, startCol = 1, colNames = FALSE)
@@ -700,6 +704,18 @@ writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_sample
 
 writeData(wb, sheet = sheet_name, filtered_xls, startRow = 6, startCol = 1)
 
+## ---- write mumerge to xlsx ------
+sheet_name <- str_glue("{peak_caller}_mumerge_centric")
+addWorksheet(wb, sheetName = sheet_name)
+writeData(wb, sheet = sheet_name, mumerge_regions, startRow = 1, startCol = 1)
+
 # saveWorkbook(wb, str_glue("Summary_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.xlsx"), overwrite = T)
 padded_exp_number<-str_pad(exp_number, width = 2, pad = "0", side = "left")
 saveWorkbook(wb, str_glue("{padded_exp_number}_Summary_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{normalization_caller}.xlsx"), overwrite = T)
+
+
+## write mumerge-centric info into csv file
+mumerge_regions %>% 
+  select(seqnames,start,end) %>% 
+  mutate(pcaller = normalization_caller) %>% 
+  write_csv(str_glue("{padded_exp_number}_MUMERGE_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{normalization_caller}.csv"), col_names = T)

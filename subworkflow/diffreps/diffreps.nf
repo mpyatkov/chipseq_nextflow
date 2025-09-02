@@ -55,6 +55,7 @@ process diffreps_summary {
     output:
     tuple val(meta.num), path("${output_dir}/*")
     tuple val(meta), path("*.xlsx"), emit: full_report
+    tuple val(meta), path("*.csv"), emit: mumerge_centric_sites
     tuple val(meta.group_name), path("Histograms_AllChr*.pdf"), path("Histograms_noXY*.pdf"), emit: hist_pdf
     tuple val(meta.group_name), path("FDR*.pdf"), emit: fdr_pdf
     tuple val(meta.group_name), path("Bar*.pdf"), emit: bar_pdf
