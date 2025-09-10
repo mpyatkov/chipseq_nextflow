@@ -715,7 +715,8 @@ saveWorkbook(wb, str_glue("{padded_exp_number}_Summary_{TREATMENT_NAME}_vs_{CONT
 
 
 ## write mumerge-centric info into csv file
-mumerge_regions %>% 
-  select(seqnames,start,end) %>% 
-  mutate(pcaller = normalization_caller) %>% 
-  write_csv(str_glue("{padded_exp_number}_MUMERGE_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{normalization_caller}.csv"), col_names = T)
+# mumerge_regions %>% 
+#   select(seqnames,start,end) %>% 
+#   mutate(pcaller = normalization_caller) %>% 
+#   write_csv(str_glue("{padded_exp_number}_MUMERGE_{TREATMENT_NAME}_vs_{CONTROL_NAME}_{normalization_caller}.csv"), col_names = T)
+

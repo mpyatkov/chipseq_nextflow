@@ -25,6 +25,7 @@ params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_l
 params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_config.csv")
 params.overwrite_outputs = true
 
+include {MUMERGE} from './subworkflow/mumerge.nf'
 include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
 include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
@@ -1004,12 +1005,15 @@ workflow {
         extra_columns = macs2_callpeak.out.xls // for diffreps summary
         peaks_for_manorm2 = macs2_callpeak.out.narrow_bed
         quality_control_peaks = macs2_callpeak.out.xls
+        mumerge_peaks = macs2_callpeak.out.narrow_bed
     } else {
         extra_columns = epic2_callpeak.out.bed6 // for diffreps summary
         peaks_for_manorm2 = epic2_callpeak.out.bed6
         quality_control_peaks = epic2_callpeak.out.bed6
+        mumerge_peaks = epic2_callpeak.out.bed6
     }
 
+    MUMERGE(diffreps_config_ch, mumerge_peaks) 
     DIFFREPS(
         // parse_configuration_xls.out.diffreps_config,
         diffreps_config_ch,
@@ -1019,14 +1023,16 @@ workflow {
         calc_norm_factors.out,
         extra_columns, //macs2_callpeak.out.xls
         mm9_chrom_sizes,
-        fq_num_reads // table with number of reads in R1.fq files for each sample
+        fq_num_reads, // table with number of reads in R1.fq files for each sample
+        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
 
     MANORM2(
         diffreps_config_ch,
         bam_count.out.fragments,
         peaks_for_manorm2,
-        mm9_chrom_sizes
+        mm9_chrom_sizes,
+        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
     
     QUALITY_PCA(

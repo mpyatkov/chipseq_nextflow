@@ -30,7 +30,8 @@ workflow MANORM2 {
     diffreps_config   // diffreps configuration file (MANORM normalization)
     fragments         // bed3 fragments obtained from bam files
     peaks_for_manorm2 //macs2_callpeak.out.narrow_bed
-    mm9_chrom_sizes
+    mm9_chrom_sizes   
+    mumerge_peaks
     
     main:
 
@@ -60,8 +61,14 @@ workflow MANORM2 {
             def new_pks = pks.findAll{it =~ "${meta.treatment_samples}|${meta.control_samples}"}
             return [meta, new_fr, new_pks]
         } | manorm2_create_profile
-        
-    manorm2_diffexp(manorm2_create_profile.out.profile, mm9_chrom_sizes)
+
+    profile_mumerge_ch = manorm2_create_profile.out.profile
+        .map{meta,profile ->
+            [meta.group_name,meta,profile]} 
+        .combine(mumerge_peaks, by: 0) 
+        .map{g,m,p,mu -> [m,p,mu]}
+    
+    manorm2_diffexp(profile_mumerge_ch, mm9_chrom_sizes)
 
     // manorm2_diffexp.out.manorm2_histograms.collect() | aggregate_manorm_pdf
     
@@ -109,15 +116,17 @@ process manorm2_diffexp {
     executor 'local'
     beforeScript 'source $HOME/.bashrc'
     publishDir path: "${params.output_dir}/manorm2_output/${output_dir}/", mode: "copy", pattern: "*.{xlsx,bed}", overwrite: true
+    // publishDir path: "${params.output_dir}/manorm2_output/${output_dir}/", mode: "copy", pattern: "*.{xlsx,bed,csv}", overwrite: true
     // publishDir path: "${params.output_dir}/diffreps_output/aggregated_pdfs/${meta.group_name}", mode: "copy", pattern: "*.pdf", overwrite: true
         
     input:
-    tuple val(meta), path(profile)
+    tuple val(meta), path(profile), path(MUMERGE)
     path(mm9_chrom_sizes)
     
     output:
     tuple val(meta), path("*.xlsx"), emit: diff_table
     tuple val(meta), path("*.bed"), emit: bed_track
+    // tuple val(meta), path("*.csv"), emit: mumerge_centric_sites
     tuple val(meta.num),val(output_dir), path("*.bb"), optional: true, emit: bb_track
     tuple val(meta), path("*noXY*.pdf"), emit: manorm2_histograms_noxy
     tuple val(meta), path("*AllChr*.pdf"), emit: manorm2_histograms_allchr
@@ -137,7 +146,8 @@ process manorm2_diffexp {
         --control_name ${meta.control_name} \
         --treatment_name ${meta.treatment_name} \
         --output_prefix ${output_prefix} \
-        --exp_number ${meta.num}
+        --exp_number ${meta.num} \
+        --mumerge_path ${MUMERGE}
 
     # ignore chrM,random and header
     if [[ \$(wc -l <*.bed) -ge 2 ]]; then

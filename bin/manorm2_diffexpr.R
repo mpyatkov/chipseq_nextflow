@@ -21,7 +21,7 @@ library(argparser)
 # if (!require("BiocManager", quietly = TRUE))
 #     install.packages("BiocManager")
 
-BiocManager::install("plyranges")
+#BiocManager::install("plyranges")
 library(plyranges)
 
 ParseArguments <- function() {
@@ -34,7 +34,7 @@ ParseArguments <- function() {
   p <- add_argument(p,'--peakcaller', default="MACS2", help = "MACS2/EPIC2/SICER peakcaller name")
   p <- add_argument(p,'--output_prefix', default="", help="name for group of comparisons")
   p <- add_argument(p,'--exp_number', default="00", help="Experiment number")
-
+  p <- add_argument(p, '--mumerge_path', help = "Path to MuMerge file which will be used instead of MACS2 union")
   return(parse_args(p))
 }
 
@@ -46,11 +46,12 @@ DEBUG <- F
 if (DEBUG) {
   # argv$manorm2_profile <-  "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/work/55/3314c2c968a9e297771a3f8b8cebea/Male_3wk_H3K27ac_vs_Female_3wk_H3K27ac_profile_bins.xls"
   # argv$treatment_samples <- "G222_M16|G222_M17"
-  argv$manorm2_profile <- "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/work/8e/5f595d5c7ba276620c299856439cb5/Female_8wk_H3K27ac_vs_Female_3wk_H3K27ac_profile_bins.xls"
-  argv$treatment_samples <- "G207_M03|G207_M04|G222_M11|G222_M12"
-  argv$control_samples <- "G222_M18|G222_M19|G222_M20"
+  argv$manorm2_profile <- "/projectnb/wax-dk/max/G242_G241_G228_DAR_ATAC/work/a7/6ff883b4200e998d667490fb69bbd0/Male_8wk_ATAC_vs_Female_8wk_ATAC_profile_bins.xls"
+  argv$treatment_samples <- "G241_M22|G241_M23|G228_M05|G228_M03"
+  argv$control_samples <- "G241_M45|G228_M04|G228_M06|G241_M46"
   argv$treatment_name <- "Male_8wk_H3K27ac"
   argv$control_name <- "Male_3wk_H3K27ac"
+  argv$mumerge_path <- "/projectnb/wax-dk/max/G242_G241_G228_DAR_ATAC/work/f9/a7c47851f80d96271714daae2bf539/Male_8wk_ATAC_vs_Female_8wk_ATAC_mumerge.bed"
 }
 
 min_avg_count <- 20
@@ -122,12 +123,35 @@ mx.manorm2.diff <- mx.manorm2.diff %>%
                            Mval > 0 & abs(Mval) > log2fc_cutoff & padj < 0.05 ~  str_glue("4_{argv$treatment_name}_Signif_sites"),
                            Mval > 0 & abs(Mval) <= log2fc_cutoff & padj < 0.05 ~  str_glue("3_{argv$treatment_name}_Weakest_sites"),
                            .default = NA))
-  
+
 # mx.manorm2.diff %>% arrange(delta) %>% writexl::write_xlsx(path = str_glue("Summary_{argv$output_prefix}.xlsx"), col_names = T)
 exp_number<-str_pad(argv$exp_number, width = 2, pad = "0", side = "left")
+
+#### create mumerge centric sites
+mumerge_peaks <- read_tsv(argv$mumerge_path, col_names = F) %>%
+  select(seqnames = X1, start = X2, end = X3) %>%
+  as_granges() %>%
+  plyranges::mutate(peakcaller_overlap = 1)
+
+mumerge_overlap <- join_overlap_left(mumerge_peaks, 
+                                     mx.manorm2.diff %>% select(seqnames = chrom, everything()) %>% as_granges()) %>% 
+  filter(!is.na(padj)) %>% 
+  as_tibble() %>% 
+  filter(padj == min(padj), .by = c(seqnames,start,end))
+
+# mumerge_overlap %>% 
+#   select(seqnames,start,end) %>% 
+#   mutate(pcaller = str_replace(argv$output_prefix, "Summary_", "")) %>% 
+#   write_csv(str_glue("{exp_number}_{argv$output_prefix}.csv"), col_names = T)
+#   
 xlsx_output_name<-str_glue("{exp_number}_{argv$output_prefix}.xlsx")
-mx.manorm2.diff %>% arrange(delta) %>% writexl::write_xlsx(path = xlsx_output_name, col_names = T)
-  
+writexl::write_xlsx(list(
+  MANORM2 = mx.manorm2.diff %>% arrange(delta),
+  mumerge_centric_filtered = mumerge_overlap),
+  path = xlsx_output_name, col_names = T)
+
+### PLOTS
+
 #### add colors
 add_colors <- function(df, hist_colors) {
 
