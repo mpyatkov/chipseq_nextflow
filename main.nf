@@ -26,6 +26,7 @@ params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_conf
 params.overwrite_outputs = true
 
 include {MUMERGE} from './subworkflow/mumerge.nf'
+include {DESEQ_MUMERGE} from './subworkflow/deseq_mumerge.nf'
 include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
 include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
@@ -1014,6 +1015,7 @@ workflow {
     }
 
     MUMERGE(diffreps_config_ch, mumerge_peaks) 
+    // MUMERGE.out.mumerge_peaks | view
     DIFFREPS(
         // parse_configuration_xls.out.diffreps_config,
         diffreps_config_ch,
@@ -1034,13 +1036,18 @@ workflow {
         mm9_chrom_sizes,
         MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
-    
-    QUALITY_PCA(
+
+    DESEQ_MUMERGE(
         diffreps_config_ch,
-        quality_control_peaks,
-        params.peakcaller
+        all_bams,
+        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
 
+    // QUALITY_PCA(
+    //     diffreps_config_ch,
+    //     quality_control_peaks,
+    //     params.peakcaller
+    // )
 
     // Aggregate DIFFREPS and MANORM2 reports for each INDIVIDUAL group separately
     manorm2_group_report_ch = MANORM2.out.diff_table
