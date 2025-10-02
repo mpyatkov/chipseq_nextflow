@@ -614,6 +614,10 @@ gr.ann.noblack.extra %>%
 ### TODO: export in csv format
 ### UNFILTERED XLSX
 
+### INFO ABOUT SHEETS
+### DIFFREPS peaks overlap with union (MUMERGE) and after that overlap with Macs2 peaks to bring a MACS2 stats to this regions
+### on unfiltered/filtered pages are DIFFREPS centered sites
+
 unfiltered_xls <- gr.ann.noblack.extra %>% 
   as_tibble() %>% 
   select(-cols) %>% 
@@ -633,7 +637,7 @@ unfiltered_xls <- gr.ann.noblack.extra %>%
   arrange(seqnames, start, end) 
 
 ### create sheet for unfiltered data
-sheet_name <- str_glue("Unfiltered_sites")
+sheet_name <- str_glue("DIFFREPS Unfiltered_sites")
 wb <- createWorkbook()
 addWorksheet(wb, sheetName = sheet_name)
 writeData(wb, sheet = sheet_name, str_glue("Unfiltered sites: {TREATMENT_NAME} (treatment)/{CONTROL_NAME} (control)"), startRow = 1, startCol = 1, colNames = FALSE)
@@ -685,6 +689,19 @@ filtered_xls <- join_overlap_left(gr.ann.noblack.extra %>% filter(peakcaller_ove
              "How many samples overlap with this region"), 
            .before = seqnames)
 
+
+
+## ---write reports to xlsx ----
+sheet_name <- str_glue("DIFFREPS_filtered_sites")
+addWorksheet(wb, sheetName = sheet_name)
+writeData(wb, sheet = sheet_name, str_glue("{peak_caller_title} filtered sites: {TREATMENT_NAME} (treatment)/{CONTROL_NAME} (control)"), startRow = 1, startCol = 1, colNames = FALSE)
+writeData(wb, sheet = sheet_name, str_glue("Default thresholds (used to define only significant sites): |log2FC| > {log2fc_cutoff}, padj < 0.05, max(avg.count) > {min_avg_count}"), startRow = 2, startCol = 1, colNames = FALSE)
+writeData(wb, sheet = sheet_name, str_glue("CONTROL/TREATMENT thresholds: |log2FC| > {log2fc_cutoff}, padj < 0.05, Control.avg/Treatment.avg > {min_avg_count}"), startRow = 3, startCol = 1, colNames = FALSE)
+writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_samples}, CONTROL samples: {control_samples}"), startRow = 4, startCol = 1, colNames = FALSE)
+
+writeData(wb, sheet = sheet_name, filtered_xls, startRow = 6, startCol = 1)
+
+
 ## ------- mumerge orientied regions -------
 mumerge_regions <- join_overlap_left(peakcaller_union, 
                                      gr.ann.noblack.extra %>% 
@@ -694,20 +711,11 @@ mumerge_regions <- join_overlap_left(peakcaller_union,
   filter(!is.na(Length)) %>% 
   filter(padj == min(padj), .by = c(seqnames,start,end)) 
 
-## ---write reports to xlsx ----
-sheet_name <- str_glue("{peak_caller}_filtered_sites")
-addWorksheet(wb, sheetName = sheet_name)
-writeData(wb, sheet = sheet_name, str_glue("{peak_caller_title} filtered sites: {TREATMENT_NAME} (treatment)/{CONTROL_NAME} (control)"), startRow = 1, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, str_glue("Default thresholds (used to define only significant sites): |log2FC| > {log2fc_cutoff}, padj < 0.05, max(avg.count) > {min_avg_count}"), startRow = 2, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, str_glue("CONTROL/TREATMENT thresholds: |log2FC| > {log2fc_cutoff}, padj < 0.05, Control.avg/Treatment.avg > {min_avg_count}"), startRow = 3, startCol = 1, colNames = FALSE)
-writeData(wb, sheet = sheet_name, str_glue("TREATMENT samples: {treatment_samples}, CONTROL samples: {control_samples}"), startRow = 4, startCol = 1, colNames = FALSE)
-
-writeData(wb, sheet = sheet_name, filtered_xls, startRow = 6, startCol = 1)
-
 ## ---- write mumerge to xlsx ------
-sheet_name <- str_glue("{peak_caller}_mumerge_centric")
+sheet_name <- str_glue("DIFFREPS_mumerge_centric")
 addWorksheet(wb, sheetName = sheet_name)
 writeData(wb, sheet = sheet_name, mumerge_regions, startRow = 1, startCol = 1)
+
 
 # saveWorkbook(wb, str_glue("Summary_{histone_mark}_{TREATMENT_NAME}_{short_treatment_names}_vs_{CONTROL_NAME}_{short_control_names}.xlsx"), overwrite = T)
 padded_exp_number<-str_pad(exp_number, width = 2, pad = "0", side = "left")
