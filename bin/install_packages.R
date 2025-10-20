@@ -2,7 +2,7 @@
 
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
-BiocManager::install(c("DEseq2", "plyranges"), update = FALSE)
+BiocManager::install(c("DESeq2", "plyranges"), update = FALSE)
 
 remotes::install_cran("argparser", upgrade = "never")
 remotes::install_cran("writexl", upgrade = "never")

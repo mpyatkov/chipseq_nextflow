@@ -40,8 +40,8 @@ if (DEBUG) {
 
 diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>%
   map_dfr(\(f){
-    readxl::read_xlsx(path = f, skip = 5, sheet = 2) %>%
-      select(seqnames, start, end, contains("avg"),log2FC, padj,peakcaller_overlap = `Overlapped with peak caller`, delta) %>%
+    readxl::read_xlsx(path = f, sheet = 3) %>%
+      select(seqnames, start, end, contains("avg"),log2FC, padj,peakcaller_overlap = peakcaller_overlap.y, delta) %>%
       filter(peakcaller_overlap == 1 & !is.na(delta) & padj < 0.05) %>%
       mutate(filename = f %>% tools::file_path_sans_ext()) %>%
       select(-peakcaller_overlap)
@@ -52,8 +52,8 @@ diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>%
   
 manorm2_df <- list.files(pattern = "MANORM2") %>%
   map_dfr(\(f){
-    readxl::read_xlsx(path = f, sheet = 1) %>%
-      select(seqnames = chrom, start, end, contains("treatment.mean"), contains("control.mean"), log2FC = Mval, padj,delta) %>%
+    readxl::read_xlsx(path = f, sheet = 2) %>%
+      select(seqnames = seqnames, start, end, contains("treatment.mean"), contains("control.mean"), log2FC = Mval, padj,delta) %>%
       rename_with(~str_replace(.x, "(.*?)\\.control\\.mean", "intensity.Control")) %>%
       rename_with(~str_replace(.x, "(.*?)\\.treatment\\.mean", "intensity.Treatment")) %>%
       #filter(padj < 0.05) %>%

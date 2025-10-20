@@ -66,20 +66,23 @@ sample_info <- sample_info[colnames(count_matrix), ]
 # Convert condition to factor with Control as reference
 sample_info$condition <- factor(sample_info$condition, levels = c("Control", "Treatment"))
 
-# Filter low count genes (keep genes with at least 10 counts across all samples)
-keep_genes <- rowSums(count_matrix) >= 10
-count_matrix_filtered <- count_matrix[keep_genes, ]
 
 # Create DESeq2 dataset
-dds <- DESeqDataSetFromMatrix(countData = count_matrix_filtered,
+dds <- DESeqDataSetFromMatrix(countData = count_matrix,
                               colData = sample_info,
                               design = ~ condition)
+
+# Filter low count genes (keep genes with at least 10 counts across minimum number of samples in any groups.
+keep <- rowSums(counts(dds) >= 10) >= min(length(treatment_samples), length(control_samples))
+dds <- dds[keep, ]
+
 dds <- DESeq(dds)
 deseq2_results <- results(dds, contrast = c("condition", "Treatment", "Control"))
 
 # Extract results with desired columns
 deseq2_output <- data.frame(
   Geneid = rownames(deseq2_results),
+  pval = deseq2_results$pvalue,
   padj = deseq2_results$padj,
   log2fc = deseq2_results$log2FoldChange,
   stringsAsFactors = FALSE
@@ -90,9 +93,9 @@ deseq2_output[c("start", "end")] <- lapply(deseq2_output[c("start", "end")], as.
 
 # Remove rows with NA values
 deseq2_output <- deseq2_output[complete.cases(deseq2_output), ]
-deseq2_output <- deseq2_output[order(deseq2_output$padj),]
-deseq2_output <- deseq2_output[c("seqnames","start","end","padj","log2fc")]
-str(deseq2_output)
+deseq2_output <- deseq2_output[order(deseq2_output$pval),]
+deseq2_output <- deseq2_output[c("seqnames","start","end","pval","padj","log2fc")]
+
 ##deseq2_output <- subset(deseq2_output, padj < 0.05 & abs(log2fc) > 1, select = c(seqnames,start,end,log2fc,padj))
 # write.table(deseq2_output, 
 #             file = paste0(GROUP_ID,"_","DEseq2_SignifOnly.csv"),
