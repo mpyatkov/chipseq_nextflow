@@ -727,7 +727,6 @@ def is_empty_file(fp) {
 process check_bam_cache {
 
     executor "local"
-    // cache false
     input:
     tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
     
@@ -747,28 +746,25 @@ process check_bam_cache {
 }
 
 process retrieve_cached_bams {
-
     executor 'local'
-    // cache false
-    // debug true
+    
     input:
-    tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
+    tuple val(sample_id), 
+          val(library), 
+          val(downsample), 
+          val(r1), 
+          val(r2),
+          path(bam_file),      
+          path(bai_file),
+          path(log_file)
     
     output:
-    tuple val(sample_id),
-        val(lib),
-        path("${sample_id}_sorted_filtered.bam"),
-        path("${sample_id}_sorted_filtered.bam.bai"),  emit: bam
-
-    tuple val(sample_id), path("${sample_id}.bowtie2.log"),  emit: log
+    tuple val(sample_id), val(lib), path(bam_file), path(bai_file), emit: bam
+    tuple val(sample_id), path(log_file), emit: log
     
     script:
     lib = library.toString().toLowerCase()
-    
     """
-    ln -s ${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}_sorted_filtered.bam .
-    ln -s ${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}_sorted_filtered.bam.bai .
-    ln -s ${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}.bowtie2.log .
     """
 }
 
@@ -966,7 +962,21 @@ workflow {
     // } 
     
     // Combine newly generated BAMs with cached BAMs
-    retrieve_cached_bams(bam_cache_status.cached.map { it[0..4] })
+    cached_bams_ch = bam_cache_status.cached
+        .map { sample_id, library, downsample, r1, r2, exist  ->
+            tuple(
+                sample_id, 
+                library, 
+                downsample, 
+                r1, 
+                r2,
+                file("${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}_sorted_filtered.bam"),
+                file("${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}_sorted_filtered.bam.bai"),
+                file("${params.chipseq_bam_cache}/${sample_id}/bam/${sample_id}.bowtie2.log")
+            )
+        } 
+    
+    retrieve_cached_bams(cached_bams_ch)
     all_bams = bowtie2_align.output.bam.mix(retrieve_cached_bams.out.bam)
     all_bowtie2_logs = bowtie2_align.output.log.mix(retrieve_cached_bams.out.log)
     

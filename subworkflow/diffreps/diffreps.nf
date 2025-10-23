@@ -39,8 +39,10 @@ process diffreps {
 process diffreps_summary {
     tag "${meta.num}"
 
-    executor 'local'
-    // cpus 16
+    beforeScript 'source $HOME/.bashrc'
+    
+    // executor 'local'
+    cpus 1
     // echo true
     errorStrategy 'retry'
     maxRetries 2
