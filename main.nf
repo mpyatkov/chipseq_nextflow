@@ -31,6 +31,7 @@ include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
 include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
 include {COMBINE_HIST_PDF} from './subworkflow/combine_hist_pdf.nf'
+include {RIPPM_NORM_FACTORS} from './subworkflow/rippm_norm_factors.nf'
 
 process trim_adapters {
     tag "${sample_id}"
@@ -272,112 +273,6 @@ process macs2_callpeak {
     """
 }
 
-process peak_union {
-
-    executor "local"
-    // echo true
-    
-    beforeScript 'source $HOME/.bashrc'
-    
-    // publishDir path: "${params.output_dir}/peak_union/", mode: "copy", pattern: "peak_union.bed", overwrite: true
-
-    input:
-    path("*")
-    
-    output:
-    path("peak_union.bed"), emit: union
-
-    script:
-    """
-    module load bedtools
-    #set -x
-    cat * > tmp.bed
-    sort -k1,1 -k2,2n tmp.bed > tmp1.bed
-    bedtools merge -i tmp1.bed > peak_union.bed
-    """
-    
-    stub:
-    """
-    cat * > peak_union.bed
-    """
-}
-
-process fragments_union_overlap {
-    tag "${sample_id}"
-    
-    executor "sge"
-    cpus 1
-    memory '8 GB'
-    beforeScript 'source $HOME/.bashrc'
-    // cache false // TODO: remove
-    
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/macs2/", mode: "copy", pattern: "${sample_id}_fragments_union_coverage.bed", overwrite: true
-        
-    input:
-    tuple val(sample_id), path(fragments)
-    path(union)
-    
-    output:
-    tuple val(sample_id), path("${sample_id}_fragments_union_coverage.bed"), emit: fr_union_overlap
-
-    script:
-    """
-    module load bedtools
-    bedtools coverage -a $union -b $fragments > "${sample_id}_fragments_union_coverage.bed"
-    """
-
-}
-
-process calc_sample_stats {
-    // executor "sge"
-    // cpus 1
-    executor 'local'
-    // echo true
-    
-    input:
-    tuple val(sample_id), path(fragments), path(fragments_union_coverage)
-    
-    output:
-    path("${sample_id}_output.txt")
-    script:
-
-    """
-    FRAGMENT_COUNT=\$(cat $fragments | wc -l )
-    FRAGMENT_IN_PEAK_COUNT=\$(awk '{n+=\$4;} ; END {print n;}' ${fragments_union_coverage})
-    FRAGMENT_IN_PEAK_RATIO=\$(echo "scale=4;\${FRAGMENT_IN_PEAK_COUNT}/\${FRAGMENT_COUNT}" | bc)
-    echo "sample_id,nfragments,nfragments_in_peak,ratio" > ${sample_id}_output.txt
-
-    echo "${sample_id},\${FRAGMENT_COUNT},\${FRAGMENT_IN_PEAK_COUNT},\${FRAGMENT_IN_PEAK_RATIO}" >> ${sample_id}_output.txt
-    """
-    
-    stub:
-    """
-    fragment_count=${sample_id}
-    fragment_in_peak_count=${sample_id}
-    fragment_in_peak_ratio=${sample_id}
-    echo "${sample_id},\${fragment_count},\${fragment_in_peak_count},\${fragment_in_peak_ratio}" > ${sample_id}_output.txt
-    """
-}
-
-process calc_norm_factors {
-
-    executor "local"
-    beforeScript 'source $HOME/.bashrc'
-    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.tsv", overwrite: true
-        
-    input:
-    path(sample_stats)
-    
-    output:
-    path("Norm_Factors.tsv")
-    
-    script:
-    """
-    module load R/${params.rversion}
-    calculate_norm_factors.R ${sample_stats} "Norm_Factors.tsv"
-    """
-}
-
 process create_bigwig_files {
 
     tag "${sample_id}"
@@ -573,7 +468,6 @@ process copy_files_to_server {
     cp ${track_lines} ${track_hub} ${combined_track_lines} ${data_path}/TRACK_LINES/
     """
 }
-
 
 process collect_metrics {
     tag "${sample_id}"
@@ -985,31 +879,6 @@ workflow {
     macs2_callpeak(all_bams, mm9_chrom_sizes)
     epic2_callpeak(bam_count.out.fragments_bed6, mm9_chrom_sizes)
     
-    //peak union (MACS2 / EPIC2(SICER))
-    if (params.peakcaller == "MACS2") {
-        peakcaller_bed_files = macs2_callpeak.out.narrow_bed
-            .map{it->it[1]}.collect()
-    } else {
-        peakcaller_bed_files = epic2_callpeak.out.bed3
-            .map{it->it[1]}.collect()
-    }
-
-    peak_union(peakcaller_bed_files)
-
-    //overlap peakcaller union and fragments files
-    fragments_union_overlap(bam_count.out.fragments, peak_union.out.union)
-
-    // TODO: need to remove .combine(union) because we do not use it
-    peaks_for_stats_ch = bam_count.out.fragments
-        .join(fragments_union_overlap.out.fr_union_overlap)
-    
-    calc_sample_stats(peaks_for_stats_ch)
-    
-    sample_stats = calc_sample_stats.out
-        .collectFile(name: "file.csv", keepHeader: true)
-        // .collectFile{item -> item.text, keepHeader: true}
-    sample_stats | calc_norm_factors
-
     // log.info("params.peakcaller: $params.peakcaller")
 
     if (params.peakcaller == "MACS2") {
@@ -1024,7 +893,10 @@ workflow {
         mumerge_peaks = epic2_callpeak.out.bed6
     }
 
-    MUMERGE(diffreps_config_ch, mumerge_peaks) 
+    MUMERGE(diffreps_config_ch, mumerge_peaks)
+
+    RIPPM_NORM_FACTORS(MUMERGE.out.mumerge_overlap, bam_count.out.fragments)
+    
     // MUMERGE.out.mumerge_peaks | view
     DIFFREPS(
         // parse_configuration_xls.out.diffreps_config,
@@ -1032,7 +904,7 @@ workflow {
         // parse_configuration_xls.out.sample_labels_config,
         sample_labels_config_ch,
         bam_count.out.fragments_bed6,
-        calc_norm_factors.out,
+        RIPPM_NORM_FACTORS.out.norm_factors,
         extra_columns, //macs2_callpeak.out.xls
         mm9_chrom_sizes,
         fq_num_reads, // table with number of reads in R1.fq files for each sample
@@ -1089,8 +961,8 @@ workflow {
   
     // TRACKS (copying, generating track lines)
     // create_bigwig_files 
-    sid_normfact_ch = calc_norm_factors.out.splitCsv(sep: "\t")
-        .map{it->[it[0],it[4]]}
+    // sid_normfact_ch = RIPPM_NORM_FACTORS.out.norm_factors.splitCsv(sep: "\t")
+    //     .map{it->[it[0],it[4]]}
     
     sid_fr_norm = bam_count.out.fragments
         .join(sid_normfact_ch)

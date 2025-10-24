@@ -31,6 +31,33 @@ process mumerge {
     """
 }
 
+process total_union {
+
+    executor "local"
+    // echo true
+    
+    beforeScript 'source $HOME/.bashrc'
+    
+    input:
+    path("*")
+    
+    output:
+    path("peak_union.bed"), emit: union
+
+    script:
+    """
+    module load bedtools
+    cat * > tmp.bed
+    sort -k1,1 -k2,2n tmp.bed > tmp1.bed
+    bedtools merge -i tmp1.bed > peak_union.bed
+    """
+    
+    stub:
+    """
+    cat * > peak_union.bed
+    """
+}
+
 workflow MUMERGE {
     take:
     diffreps_config
@@ -48,7 +75,21 @@ workflow MUMERGE {
             return [meta.group_name, new_xls]} 
 
     input_params | mumerge
+
+    mumerge.out.count().view{n -> println "Number of mumerge group comparisons: ${n}"}
+
+    total_overlap = null
+    if (mumerge.out.count() == 1) {
+        total_overlap = mumerge.out
+    } else {
+        total_union(mumerge.out
+                    .map{group_name, mumerge_file  -> [mumerge_file]}
+                    .collect())
+        
+        total_overlap = total_union.out
+    }
     
     emit:
     mumerge_peaks = mumerge.out
+    mumerge_overlap = total_overlap
 }
