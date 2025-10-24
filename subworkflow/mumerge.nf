@@ -76,7 +76,7 @@ workflow MUMERGE {
 
     input_params | mumerge
 
-    mumerge.out.count().view{n -> println "Number of mumerge group comparisons: ${n}"}
+    // mumerge.out.count().view{n -> println "Number of mumerge group comparisons: ${n}"}
 
     total_overlap = null
     if (mumerge.out.count() == 1) {
