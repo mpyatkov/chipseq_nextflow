@@ -509,28 +509,6 @@ process collect_metrics {
     """
 }
 
-process fastq_num_reads {
-    tag "${sample_id}"
-    cpus 1
-    time '1h'
-
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "copy", overwrite: params.overwrite_outputs 
-
-    input:
-    tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
-
-    output:
-    tuple val(sample_id), path("*_raw_reads.txt") , emit: raw_reads
-
-    script:
-    """
-    ## calculate number of raw reads
-    NUMREADS=`echo \$(zcat $r1 | wc -l)/4 | bc`
-    echo "sample_id,num_raw_reads" >> ${sample_id}_raw_reads.txt
-    echo "${sample_id},\${NUMREADS}" >> ${sample_id}_raw_reads.txt
-    """
-}
-
 process fastqc {
     tag "${sample_id}"
     cpus 4
@@ -801,6 +779,36 @@ process diffreps_manorm2_overlap {
 //     """
 // }
 
+def parse_diffreps_configuration(row) {
+    def meta = [:]
+    // 1, Hnf6_Male, Hnf6_Female, G73M03|G73M04|G76M12|G76M13, G73M01|G73M02|G76M10|G76M11, RIPPM, 1000
+    meta.num               = row[0].trim()
+    meta.treatment_name    = row[1].trim()
+    meta.control_name      = row[2].trim()
+    meta.treatment_samples = row[3].trim()
+    meta.control_samples   = row[4].trim()
+    meta.method            = row[5].trim()
+    meta.window_size = (6 < row.size()) ? row.get(6) : null
+
+    window_size_str = meta.window_size == null ? "" : "_${meta.window_size}"
+    meta.report_name = "${meta.num}_${meta.method}${window_size_str}_${meta.treatment_name}_vs_${meta.control_name}"
+    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
+    return meta
+}
+
+def parse_comparisons_configuration(row) {
+    def meta = [:]
+    // 1, Hnf6_Male, Hnf6_Female, G73M03|G73M04|G76M12|G76M13, G73M01|G73M02|G76M10|G76M11, RIPPM, 1000
+    meta.num               = row[0].trim()
+    meta.treatment_name    = row[1].trim()
+    meta.control_name      = row[2].trim()
+    meta.treatment_samples = row[3].trim()
+    meta.control_samples   = row[4].trim()
+    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
+    return meta
+}
+
+
 workflow {
     // parse_configuration_xls(params.xlsx_config)
     // parse_configuration_xls.out.sample_labels_config | view
@@ -812,6 +820,32 @@ workflow {
     sample_labels_config_ch = Channel.from(params.sample_labels_config)
     diffreps_config_ch = Channel.from(params.diffreps_config)
 
+
+    // method, window
+    // for CSAW and DESEQ no window parameters - 0
+    methods = Channel.from(["DESEQ"],
+                           ["CSAW"],
+                           ["DIFFREPS", 200],
+                           ["DIFFREPS", 1000],
+                           ["RIPPM", 200],
+                           ["RIPPM", 1000])
+
+    comparisons = diffreps_config_ch
+        .splitCsv()
+        .map{it->parse_comparisons_configuration(it)}
+
+    diffreps_final = diffreps_config_ch
+        .splitCsv()
+        .combine(methods)
+        .map{it->parse_diffreps_configuration(it)}
+        .branch {
+            diffreps: it.method =~"DIFFREPS|RIPPM"
+            deseq: it.method =~"DESEQ"
+            csaw: it.method =~"CSAW"
+        }
+
+    // diffreps_final.deseq | view
+    
     // [sid, library, downsample, r1, r2]
     fastq_records = fastq_config_ch.splitCsv()
 
@@ -824,14 +858,6 @@ workflow {
         cached: it[5] == true
         uncached: it[5] == false
     }
-
-    // Process only uncached samples through the trimming step
-    // TODO: revised step, I suppose we are going to use only trimmed fastq files, see below
-    // if (params.trim_adapters) {
-    //     fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]})
-    // } else {
-    //     fastq_for_mapping = bam_cache_status.uncached.map{it -> it[0..4]}
-    // }
 
     fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]}) 
     
@@ -893,7 +919,7 @@ workflow {
         mumerge_peaks = epic2_callpeak.out.bed6
     }
 
-    MUMERGE(diffreps_config_ch, mumerge_peaks)
+    MUMERGE(comparisons, mumerge_peaks)
 
     RIPPM_NORM_FACTORS(MUMERGE.out.mumerge_overlap, bam_count.out.fragments)
     

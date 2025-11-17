@@ -60,17 +60,14 @@ process total_union {
 
 workflow MUMERGE {
     take:
-    diffreps_config
+    comparisons
     peakcaller_peaks
     
     main:
     
-    input_params = diffreps_config
-        .splitCsv() 
-        .map{it->parse_config(it)}
-        .unique { it.group_name }
+    input_params = comparisons
         .combine(peakcaller_peaks.map{it -> it[1]}.collect().toSortedList())
-    .map{meta,xls ->
+        .map{meta,xls ->
             def new_xls = xls.findAll{it =~ "${meta.treatment_samples}|${meta.control_samples}"} 
             return [meta.group_name, new_xls]} 
 

@@ -24,7 +24,7 @@ argv <- ParseArguments()
 
 DEBUG <- FALSE
 if (DEBUG){
-  argv$input_xlsx <- "/projectnb/wax-dk/max/G226/G226_H3K4me3.xlsx" ## with diffreps config
+  argv$input_xlsx <- "/projectnb/wax-dk/max/REFACTORING/2groups_test_v2.xlsx" ## with diffreps config
   #argv$input_xlsx <- "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207_v3_H3K27ac.xlsx" ## without diffreps config
 }
 
@@ -61,7 +61,7 @@ get_table <- function(path_to_file, sheet_number, marker, shift, num_cols,row_li
 ### config processing
 fastq <- get_table(argv$input_xlsx, sheet_number = 1, marker = "sample_id", shift = 0, num_cols = 5,row_limit = 100)
 sample_labels <- get_table(argv$input_xlsx, sheet_number = 2, marker = "sample_id", shift = 0, num_cols = 3,row_limit = 100)
-diffreps <- get_table(argv$input_xlsx, sheet_number = 2, marker = "exp_num", shift = 0, num_cols = 5,row_limit = 100)
+diffreps <- get_table(argv$input_xlsx, sheet_number = 2, marker = "exp_num", shift = 0, num_cols = 3,row_limit = 100)
 groups <- get_table(argv$input_xlsx, sheet_number = 2, marker = "group_description", shift = -1, num_cols = 3,row_limit = 100)
 
 ### for each "auto" in groups config we need to assign specific color
@@ -99,7 +99,7 @@ t2 <- sample_labels %>%
 ## collapse groups and make final configuration file for diffreps
 final_diffreps_config <- t1 %>% left_join(t2, by = "group_id") %>% 
   left_join(groups %>% select(group_id, group_description), by = "group_id") %>% 
-  group_by(exp_num, normalization, window, group_type) %>% 
+  group_by(exp_num, group_type) %>% 
   summarise(combined_samples = unique(samples) %>% str_c(collapse = "|"), 
             combined_group_desc = unique(group_description) %>% str_c(collapse = "_and_")) %>% 
   ungroup() %>% 
@@ -108,7 +108,7 @@ final_diffreps_config <- t1 %>% left_join(t2, by = "group_id") %>%
          treatment_samples = combined_samples_treatment_group,
          control_name = combined_group_desc_control_group,
          treatment_name = combined_group_desc_treatment_group) %>% 
-  select(exp_num,treatment_name,control_name,treatment_samples,control_samples,normalization, window)
+  select(exp_num,treatment_name,control_name,treatment_samples,control_samples)
 
   
 ### prepare sample_labels config
