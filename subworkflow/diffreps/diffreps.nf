@@ -1,21 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-def create_diffreps_channel(row) {
-    def meta = [:]
-    // 1, Hnf6_Male, Hnf6_Female, G73M03|G73M04|G76M12|G76M13, G73M01|G73M02|G76M10|G76M11, RIPPM, 1000
-    meta.num               = row[0].trim()
-    meta.treatment_name    = row[1].trim()
-    meta.control_name      = row[2].trim()
-    meta.treatment_samples = row[3].trim()
-    meta.control_samples   = row[4].trim()
-    meta.normalization     = row[5].trim()
-    meta.window_size       = row[6].trim()
-    meta.report_name = "diffReps_${meta.treatment_name}.vs.${meta.control_name}_${meta.normalization}_${meta.window_size}"
-    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
-    return meta
-}
-
 process diffreps {
     tag "${meta.num}"
     executor 'sge'
@@ -30,7 +15,7 @@ process diffreps {
     tuple val(meta), path(TREATMENT_FILES), path(CONTROL_FILES), path(NORM_FILE)
     
     output:
-    tuple val(meta) , path("diffReps_*")
+    tuple val(meta) , path("*_vs_*")
 
     shell:
     template 'diffreps.sh'
@@ -44,9 +29,9 @@ process diffreps_summary {
     // executor 'local'
     cpus 1
     // echo true
+    
     errorStrategy 'retry'
     maxRetries 2
-
     publishDir path: "${params.output_dir}/diffreps_output/${meta.group_name}/", mode: "copy", pattern: "${output_dir}/*", overwrite: true
     
     input:
@@ -60,12 +45,12 @@ process diffreps_summary {
     tuple val(meta.group_name), path("Histograms_AllChr*.pdf"), path("Histograms_noXY*.pdf"), emit: hist_pdf
     tuple val(meta.group_name), path("FDR*.pdf"), emit: fdr_pdf
     tuple val(meta.group_name), path("Bar*.pdf"), emit: bar_pdf
-    tuple val(meta.num), val(output_dir), path("*.bb"), emit: diffreps_track
+    tuple val(meta.num), val(meta.method), val(meta.window_size), val(output_dir), path("*.bb"), emit: diffreps_track
     path("${meta.report_name}"), emit: diffreps_output    
 
     shell:
     peakcaller="${params.peakcaller}"
-    output_dir="${meta.num}_${meta.report_name}_${peakcaller}"
+    output_dir="${meta.report_name}_${peakcaller}"
     dataset_label="${params.dataset_label}"
     
     template 'diffreps_summary.sh'
@@ -135,15 +120,7 @@ workflow DIFFREPS {
 
     main:
 
-    input_params = diffreps_config
-        .splitCsv() 
-        .map{it->create_diffreps_channel(it)}
-        .branch {
-            diffreps: it.normalization =~"DIFFREPS|RIPPM"
-            manorm2: true
-        }
-    
-    diffreps_params = input_params.diffreps
+    diffreps_params = diffreps_config
         .combine(
             fragments_bed6
                 .map{it->it[1]}

@@ -9,6 +9,7 @@ params.peakcaller="MACS2"    // by default going to use MACS2 (SICER/EPIC2 alter
 // ChIPSEQ TF                                --> MACS2 model will be used
 // ATAC (DAR), CutNRun, Histone modification --> MACS2 model is not required
 params.macs2_model = false
+
 //<<< PARAMETERS TO CHANGE
 
 mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: true)
@@ -373,24 +374,6 @@ process create_diffreps_tracks {
     """
 }
 
-
-// process parse_configuration_xls {
-//     executor 'local'
-//     input:
-//     path(xlsx)
-
-//     output:
-//     path("sample_labels.csv"), emit: sample_labels_config
-//     path("diffreps_config.csv"), emit: diffreps_config, optional: true
-//     path("fastq_config.csv"), emit: fastq_config
-
-//     script:
-//     """
-//     module load R/${params.rversion}
-//     config_parser.R --input_xlsx ${xlsx}
-//     """
-// }
-
 process epic2_callpeak {
     tag "${sample_id}"
     
@@ -749,7 +732,7 @@ process diffreps_manorm2_overlap {
     
     beforeScript 'source $HOME/.bashrc'
     input:
-    tuple val(group_name), path(diffreps_reports), path(manorm2_report)
+    tuple val(group_name), path(diffreps_reports)
     
     output:
     tuple val(group_name), path("*.xlsx")
@@ -760,24 +743,6 @@ process diffreps_manorm2_overlap {
     diffreps_manorm2_overlap.R --output_prefix ${group_name}
     """
 }
-
-// process cache_bams {
-
-//     executor 'local'
-//     publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}_sorted_filtered.bam*", overwrite: false
-
-//     input:
-//     tuple val(sample_id), val(library), path(bam), path(bai)
-    
-//     output:
-//     tuple val(sample_id), path("${sample_id}_sorted_filtered.bam"), path("${sample_id}_sorted_filtered.bam.bai"),  emit: bam
-    
-//     script:
-//     """
-//     cp ${bam} ${sample_id}_sorted_filtered.bam
-//     cp ${bai} ${sample_id}_sorted_filtered.bam.bai
-//     """
-// }
 
 def parse_diffreps_configuration(row) {
     def meta = [:]
@@ -862,24 +827,14 @@ workflow {
     fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]}) 
     
     // Make QC analysis (only for uncached, it will work because of storeDir)
-    // fastqc(fastq_records)  
     fastqc(fastq_for_mapping) // calculate fastqc only for new samples with trimmed adapters 
 
     // Calculate number of reads in fastq files  (only for uncached)
-    // (required for downstream report)
-    // fastq_num_reads(fastq_for_mapping)
-
     fq_num_reads = fastqc.out.raw_reads  
         .map{it -> it[1]}
         .collectFile(name: "numreads.csv", keepHeader: true)
         
     bowtie2_align(fastq_for_mapping, mm9_black_complement)
-
-    // TODO: make caching optional because for public data probably it will not
-    // be required to cache bam files
-    // if (params.need_cache) {
-    //     cache_bams(bowtie2_align.out.bam)
-    // } 
     
     // Combine newly generated BAMs with cached BAMs
     cached_bams_ch = bam_cache_status.cached
@@ -909,12 +864,10 @@ workflow {
 
     if (params.peakcaller == "MACS2") {
         extra_columns = macs2_callpeak.out.xls // for diffreps summary
-        peaks_for_manorm2 = macs2_callpeak.out.narrow_bed
         quality_control_peaks = macs2_callpeak.out.xls
         mumerge_peaks = macs2_callpeak.out.narrow_bed
     } else {
         extra_columns = epic2_callpeak.out.bed6 // for diffreps summary
-        peaks_for_manorm2 = epic2_callpeak.out.bed6
         quality_control_peaks = epic2_callpeak.out.bed6
         mumerge_peaks = epic2_callpeak.out.bed6
     }
@@ -923,10 +876,9 @@ workflow {
 
     RIPPM_NORM_FACTORS(MUMERGE.out.mumerge_overlap, bam_count.out.fragments)
     
-    // MUMERGE.out.mumerge_peaks | view
     DIFFREPS(
         // parse_configuration_xls.out.diffreps_config,
-        diffreps_config_ch,
+        diffreps_final.diffreps,
         // parse_configuration_xls.out.sample_labels_config,
         sample_labels_config_ch,
         bam_count.out.fragments_bed6,
@@ -937,41 +889,27 @@ workflow {
         MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
 
-    MANORM2(
-        diffreps_config_ch,
-        bam_count.out.fragments,
-        peaks_for_manorm2,
-        mm9_chrom_sizes,
-        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
-    )
-
     DESEQ_MUMERGE(
-        diffreps_config_ch,
+        diffreps_final.deseq,
         all_bams,
         MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
 
-    // QUALITY_PCA(
-    //     diffreps_config_ch,
-    //     quality_control_peaks,
-    //     params.peakcaller
-    // )
+    QUALITY_PCA(
+        comparisons,
+        quality_control_peaks,
+        params.peakcaller
+    )
 
-    // Aggregate DIFFREPS and MANORM2 reports for each INDIVIDUAL group separately
-    manorm2_group_report_ch = MANORM2.out.diff_table
-        .map{meta, rest -> [meta.group_name, rest]}
-    
     diffreps_group_report_ch = DIFFREPS.out.full_report
         .map{meta, rest -> [meta.group_name, rest]}
         .groupTuple() 
 
-    combined_manorm2_diffreps_ch = diffreps_group_report_ch.join(manorm2_group_report_ch)
-    diffreps_manorm2_overlap(combined_manorm2_diffreps_ch)
+    diffreps_manorm2_overlap(diffreps_group_report_ch)
 
 
     // Aggregated report which contains all DIFFREPS and MANORM2 reports together
     only_reports_ch  = DIFFREPS.out.full_report
-        .mix(MANORM2.out.diff_table)
         .map{meta,rest -> rest}
         .collect()
         
@@ -981,14 +919,11 @@ workflow {
     COMBINE_HIST_PDF (
         DIFFREPS.out.aggregated_histograms_diffreps_noxy,    
         DIFFREPS.out.aggregated_histograms_diffreps_allchr,
-        MANORM2.out.manorm2_histogram_noxy,
-        MANORM2.out.manorm2_histogram_allchr
     )
   
     // TRACKS (copying, generating track lines)
-    // create_bigwig_files 
-    // sid_normfact_ch = RIPPM_NORM_FACTORS.out.norm_factors.splitCsv(sep: "\t")
-    //     .map{it->[it[0],it[4]]}
+    sid_normfact_ch = RIPPM_NORM_FACTORS.out.norm_factors.splitCsv(sep: "\t")
+        .map{it->[it[0],it[4]]}
     
     sid_fr_norm = bam_count.out.fragments
         .join(sid_normfact_ch)
@@ -1022,12 +957,23 @@ workflow {
         .collectFile{item -> item.join(",")+'\n'}
         .combine(sample_labels_config_ch)
 
-    // create track lines (group specific)    
+    // create track lines (group specific)
+    diffreps_tmp_file = diffreps_final.diffreps
+        .map{item->[item.num,
+                    item.treatment_name,
+                    item.control_name,
+                    item.treatment_samples,
+                    item.control_samples,
+                    item.method,
+                    item.window_size]}
+        .collectFile(name: 'diffreps_output.csv', sort: true){
+            item -> item.join(",")+'\n'
+        }
+
     group_specific_ch = DIFFREPS.out.diffreps_track
-        .mix(MANORM2.out.manorm2_track)
-        .map{it->[it[0], it[2].getName()]}
+        .map{it->[it[0],it[1],it[2],it[3],it[4].getName()]}
         .collectFile{item -> item.join(",")+'\n'}
-        .combine(diffreps_config_ch) 
+        .combine(diffreps_tmp_file)
 
     create_sample_specific_tracks(sid_specific_ch)
     create_diffreps_tracks(group_specific_ch)
@@ -1046,13 +992,12 @@ workflow {
     narrow_files= macs2_callpeak.out.narrow_bb.map{it -> it[1]}
     broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
     broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
-    bam_files=all_bams.map{it->[it[2],it[3]]}
-    diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[2]}
-    manorm2_files=MANORM2.out.manorm2_track.map{it->it[2]}
+    // bam_files=all_bams.map{it->[it[2],it[3]]}
+    diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[4]}
     combined_bwfiles=combine_bigwig_tracks.out.map{it->it[3]} 
 
     // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
-    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, manorm2_files, combined_bwfiles).collect()
+    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, combined_bwfiles).collect()
 
     if (params.copy_to_server_bool){
         copy_files_to_server(track_files_to_server,

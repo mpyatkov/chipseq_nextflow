@@ -1,21 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-def create_diffreps_channel(row) {
-    def meta = [:]
-    // 1, Hnf6_Male, Hnf6_Female, G73M03|G73M04|G76M12|G76M13, G73M01|G73M02|G76M10|G76M11, RIPPM, 1000
-    meta.num               = row[0].trim()
-    meta.treatment_name    = row[1].trim()
-    meta.control_name      = row[2].trim()
-    meta.treatment_samples = row[3].trim()
-    meta.control_samples   = row[4].trim()
-    meta.normalization     = row[5].trim()
-    meta.window_size       = row[6].trim()
-    meta.report_name = "diffReps_${meta.treatment_name}.vs.${meta.control_name}_${meta.normalization}_${meta.window_size}"
-    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
-    return meta
-}
-
 workflow QUALITY_PCA {
 
     take:
@@ -25,15 +10,7 @@ workflow QUALITY_PCA {
 
     main:
 
-    input_params = diffreps_config
-        .splitCsv() 
-        .map{it->create_diffreps_channel(it)}
-        .branch {
-            diffreps: it.normalization =~"DIFFREPS|RIPPM"
-            manorm2: true
-        } 
-
-    pairs_to_compare = input_params.diffreps 
+    pairs_to_compare = diffreps_config
         .map{meta -> ["${meta.treatment_name}_vs_${meta.control_name}",meta.treatment_name, meta.control_name, meta.treatment_samples, meta.control_samples]}
         .groupTuple()        
         .combine(peakcaller_xls

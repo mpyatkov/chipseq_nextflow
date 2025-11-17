@@ -16,8 +16,9 @@ argv <- ParseArguments()
 DEBUG <- FALSE
 
 if (DEBUG) {
-  argv$diffreps_config <- "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/raw_configs/diffreps_config.csv"
-  argv$diffreps_tracks <- "/projectnb/wax-dk/max/G222_CHIPSEQ/G222_G156_G207/work/tmp/4d/c7ef0fd4c2e34bfac407cc08c52190/collect-file.data"
+  #argv$diffreps_config <- "/projectnb/wax-dk/max/REFACTORING/raw_configs/diffreps_config.csv"
+  argv$diffreps_config <- "/projectnb/wax-dk/max/REFACTORING/work/tmp/17/f56bbd1f9278fede310d4acb7c59f3/diffreps_output.csv"
+  argv$diffreps_tracks <- "/projectnb/wax-dk/max/REFACTORING/work/tmp/f4/2983095d2b562cc4fbe64374668142/collect-file.data"
   argv$data_path <- "buuser/TEST1"
 }
 
@@ -31,7 +32,7 @@ diffreps_config <- read_csv(argv$diffreps_config, col_names = F) %>%
   select(exp_num = 1, tr_name = 2, ctrl_name = 3, tr_samples = 4, ctrl_samples = 5, normalization = 6, window_size = 7)
 
 diffreps_tracks <- read_csv(argv$diffreps_tracks, col_names = F) %>% 
-  select(exp_num = 1, filename = 2)
+  select(exp_num = 1,normalization = 2, window_size = 3, name = 4, filename = 5)
 
 combined <- left_join(diffreps_config, diffreps_tracks) %>%
   drop_na()
@@ -45,16 +46,12 @@ combined <- left_join(diffreps_config, diffreps_tracks) %>%
   # arrange(gr) %>%
   # select(-gr)
 
-combined %>% 
-  mutate(gr = case_when(normalization == "MANORM" ~ str_glue("{ctrl_name}{tr_name}0{normalization}{window_size}"),
-                        TRUE ~ str_glue("{ctrl_name}{tr_name}{normalization}{window_size}"))) %>% 
-  arrange(gr)
-
 get_track_line <- function(t){
   track_path <- str_glue("http://waxmanlabvm.bu.edu/{argv$data_path}/{t$filename}")
   peakcaller <- ifelse(str_detect(t$filename, "MACS2"), "MACS2", "SICER")
-  track <- str_glue("track type=bigBed name={t$exp_num}_{t$tr_name}_vs_{t$ctrl_name} ",
-           "description={t$tr_name}_vs_{t$ctrl_name}_{peakcaller}_{t$normalization}_{t$window_size} visibility=dense itemRgb=on ",
+  #track <- str_glue("track type=bigBed name={t$exp_num}_{t$tr_name}_vs_{t$ctrl_name} ",
+  track <- str_glue("track type=bigBed name={t$exp_num}_{t$normalization}_{t$window_size} ",
+           "description={t$exp_num}_{t$tr_name}_vs_{t$ctrl_name}_{peakcaller}_{t$normalization}_{t$window_size} visibility=dense itemRgb=on ",
            "bigDataUrl={track_path}")
   
   tibble(track = track)

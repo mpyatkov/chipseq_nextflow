@@ -1,17 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-def parse_config(row) {
-    def meta = [:]
-    meta.treatment_name    = row[1].trim()
-    meta.control_name      = row[2].trim()
-    meta.treatment_samples = row[3].trim()
-    meta.control_samples   = row[4].trim()
-    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
-
-    return meta
-}
-
 // Counting of reads/fragments inside MUMERGE peaks
 process calc_coverage {
     tag "${meta.group_name}"
@@ -85,9 +74,6 @@ workflow DESEQ_MUMERGE {
         .map { p, files -> [p, files.flatten()] }
     
     input_params = diffreps_config
-        .splitCsv() 
-        .map{it->parse_config(it)}
-        .unique { it.group_name }
         .combine(bambai_only)
         .map{meta,lib,bambai ->
             def new_meta = meta
