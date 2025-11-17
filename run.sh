@@ -38,6 +38,10 @@ fi
 
 # We need to preinstall packages before first run.
 # If "work" directory does not exist we suppose that this is first run
+
+## for new users it is required to create directory for installing packages
+mkdir -p ~/R/x86_64-pc-linux-gnu-library/${RVERSION}
+
 if [ ! -d "work" ]; then
     # ./install_packages.sh ${RVERSION}
     # version=${1:-4.4}

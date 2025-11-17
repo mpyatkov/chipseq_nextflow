@@ -2,12 +2,21 @@
 
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
-BiocManager::install(c("DESeq2", "plyranges"), update = FALSE)
 
-remotes::install_cran("argparser", upgrade = "never")
-remotes::install_cran("writexl", upgrade = "never")
-remotes::install_cran("openxlsx2", upgrade = "never")
-remotes::install_cran("formattable", upgrade = "never")
-remotes::install_cran("ggfortify", upgrade = "never")
-remotes::install_cran("MAnorm2", upgrade = "never")
-remotes::install_cran("openxlsx2", upgrade = "never")
+# Install packages only if not installed
+packages <- c("DESeq2", "plyranges")
+for (pkg in packages) {
+    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+        BiocManager::install(pkg, update = FALSE, ask = FALSE, quiet = TRUE)
+        #library(pkg, character.only = TRUE)
+    }
+}
+
+# Compact version for quick scripts
+if (!requireNamespace("pak", quietly = TRUE)) {
+  install.packages("pak")
+}
+
+suppressPackageStartupMessages(library(pak))
+pak::pkg_install(c("argparser", "writexl", "openxlsx2", "formattable", "ggfortify", "MAnorm2"))
+
