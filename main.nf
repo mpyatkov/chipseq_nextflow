@@ -28,6 +28,7 @@ params.overwrite_outputs = true
 
 include {MUMERGE} from './subworkflow/mumerge.nf'
 include {DESEQ_MUMERGE} from './subworkflow/deseq_mumerge.nf'
+include {CSAW_MUMERGE} from './subworkflow/csaw_mumerge.nf'
 include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
 include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
@@ -895,6 +896,12 @@ workflow {
         MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
 
+    CSAW_MUMERGE(
+        diffreps_final.csaw,
+        all_bams,
+        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
+    )
+    
     QUALITY_PCA(
         comparisons,
         quality_control_peaks,
