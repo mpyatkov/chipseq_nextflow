@@ -10,6 +10,15 @@ params.peakcaller="MACS2"    // by default going to use MACS2 (SICER/EPIC2 alter
 // ATAC (DAR), CutNRun, Histone modification --> MACS2 model is not required
 params.macs2_model = false
 
+// method, window
+// for CSAW and DESEQ no window parameters
+methods = Channel.from(["DESEQ"],
+                       ["CSAW"],
+                       ["DIFFREPS", 200],
+                       ["DIFFREPS", 1000],
+                       ["RIPPM", 200],
+                       ["RIPPM", 1000])
+
 //<<< PARAMETERS TO CHANGE
 
 mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: true)
@@ -29,8 +38,7 @@ params.overwrite_outputs = true
 include {MUMERGE} from './subworkflow/mumerge.nf'
 include {DESEQ_MUMERGE} from './subworkflow/deseq_mumerge.nf'
 include {CSAW_MUMERGE} from './subworkflow/csaw_mumerge.nf'
-include {DIFFREPS} from './subworkflow/diffreps/diffreps.nf'
-include {MANORM2} from './subworkflow/diffreps/manorm2.nf'
+include {DIFFREPS} from './subworkflow/diffreps_mumerge.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
 include {COMBINE_HIST_PDF} from './subworkflow/combine_hist_pdf.nf'
 include {RIPPM_NORM_FACTORS} from './subworkflow/rippm_norm_factors.nf'
@@ -624,8 +632,28 @@ process retrieve_cached_bams {
     """
 }
 
+// aggregate individual group reports
+process by_comparison_overlap {
+    tag "${group_name}"
+    executor 'local'
+    publishDir path: "${params.output_dir}/summary/by_comparison_overlap/", mode: "copy", pattern: "*.xlsx", overwrite: true
+    
+    beforeScript 'source $HOME/.bashrc'
+    input:
+    tuple val(group_name), path(diffreps_reports)
+    
+    output:
+    tuple val(group_name), path("*.xlsx")
+
+    script:
+    """
+    module load R/${params.rversion}
+    methods_overlap.R --output_prefix ${group_name}
+    """
+}
+
 //aggregate all diffreps and manorm2 reports
-process diffreps_manorm2_overlap_general {
+process all_comparisons_overlap {
     tag "diffreps_manorm2_overlap_general"
 
     executor 'sge'
@@ -633,7 +661,7 @@ process diffreps_manorm2_overlap_general {
     memory '32 GB'
     time '1h'
     // executor 'local'
-    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.xlsx", overwrite: true
     beforeScript 'source $HOME/.bashrc'
 
     input:
@@ -645,19 +673,19 @@ process diffreps_manorm2_overlap_general {
     script:
     """
     module load R/${params.rversion}
-    diffreps_manorm2_overlap.R --output_prefix "all_groups_together"
+    methods_overlap.R --output_prefix "all_groups_together"
     """
 }
 
 
-process extradetailed_peaks_overlaps {
+process extradetailed_macs2_epic_peaks_overlaps {
     
     executor "local"
     // echo true
     
     beforeScript 'source $HOME/.bashrc'
     
-    publishDir path: "${params.output_dir}/summary/extradetailed_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/extradetailed_macs2_epic_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
     input:
     path(peaks)
@@ -725,26 +753,6 @@ process combine_bigwig_tracks {
     """
 }
 
-process diffreps_manorm2_overlap {
-    tag "${group_name}"
-    executor 'local'
-    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_individual_reports_for_groups/", mode: "copy", pattern: "*overlap_manorm2_vs_diffreps.xlsx", overwrite: true
-    publishDir path: "${params.output_dir}/summary/manorm2_diffreps_overlap_top25/", mode: "copy", pattern: "*top25*.xlsx", overwrite: true
-    
-    beforeScript 'source $HOME/.bashrc'
-    input:
-    tuple val(group_name), path(diffreps_reports)
-    
-    output:
-    tuple val(group_name), path("*.xlsx")
-
-    script:
-    """
-    module load R/${params.rversion}
-    diffreps_manorm2_overlap.R --output_prefix ${group_name}
-    """
-}
-
 def parse_diffreps_configuration(row) {
     def meta = [:]
     // 1, Hnf6_Male, Hnf6_Female, G73M03|G73M04|G76M12|G76M13, G73M01|G73M02|G76M10|G76M11, RIPPM, 1000
@@ -786,16 +794,6 @@ workflow {
     sample_labels_config_ch = Channel.from(params.sample_labels_config)
     diffreps_config_ch = Channel.from(params.diffreps_config)
 
-
-    // method, window
-    // for CSAW and DESEQ no window parameters - 0
-    methods = Channel.from(["DESEQ"],
-                           ["CSAW"],
-                           ["DIFFREPS", 200],
-                           ["DIFFREPS", 1000],
-                           ["RIPPM", 200],
-                           ["RIPPM", 1000])
-
     comparisons = diffreps_config_ch
         .splitCsv()
         .map{it->parse_comparisons_configuration(it)}
@@ -810,8 +808,6 @@ workflow {
             csaw: it.method =~"CSAW"
         }
 
-    // diffreps_final.deseq | view
-    
     // [sid, library, downsample, r1, r2]
     fastq_records = fastq_config_ch.splitCsv()
 
@@ -860,6 +856,16 @@ workflow {
     
     macs2_callpeak(all_bams, mm9_chrom_sizes)
     epic2_callpeak(bam_count.out.fragments_bed6, mm9_chrom_sizes)
+
+    // calculate overlaps for all MACS2 narrow/broad and SICER peaks
+    // for each type of peaks create separate xlsx report
+    peaks_for_aggregation = macs2_callpeak.out.xls
+        .mix(macs2_callpeak.out.broad_xls)
+        .mix(epic2_callpeak.out.bed6)
+        .map{sid,bedfile -> bedfile}
+        .collect()
+
+    extradetailed_macs2_epic_peaks_overlaps(peaks_for_aggregation, params.sample_labels_config)
     
     // log.info("params.peakcaller: $params.peakcaller")
 
@@ -912,7 +918,7 @@ workflow {
         .map{meta, rest -> [meta.group_name, rest]}
         .groupTuple() 
 
-    diffreps_manorm2_overlap(diffreps_group_report_ch)
+    by_comparison_overlap(diffreps_group_report_ch)
 
 
     // Aggregated report which contains all DIFFREPS and MANORM2 reports together
@@ -920,13 +926,13 @@ workflow {
         .map{meta,rest -> rest}
         .collect()
         
-    diffreps_manorm2_overlap_general(only_reports_ch)
+    all_comparisons_overlap(only_reports_ch)
 
     // Combine MAnorm2 and diffReps pdfs
-    COMBINE_HIST_PDF (
-        DIFFREPS.out.aggregated_histograms_diffreps_noxy,    
-        DIFFREPS.out.aggregated_histograms_diffreps_allchr,
-    )
+    // COMBINE_HIST_PDF (
+    //     DIFFREPS.out.aggregated_histograms_diffreps_noxy,    
+    //     DIFFREPS.out.aggregated_histograms_diffreps_allchr,
+    // )
   
     // TRACKS (copying, generating track lines)
     sid_normfact_ch = RIPPM_NORM_FACTORS.out.norm_factors.splitCsv(sep: "\t")
@@ -977,21 +983,21 @@ workflow {
             item -> item.join(",")+'\n'
         }
 
-    group_specific_ch = DIFFREPS.out.diffreps_track
-        .map{it->[it[0],it[1],it[2],it[3],it[4].getName()]}
-        .collectFile{item -> item.join(",")+'\n'}
-        .combine(diffreps_tmp_file)
+    // group_specific_ch = DIFFREPS.out.diffreps_track
+    //     .map{it->[it[0],it[1],it[2],it[3],it[4].getName()]}
+    //     .collectFile{item -> item.join(",")+'\n'}
+    //     .combine(diffreps_tmp_file)
 
     create_sample_specific_tracks(sid_specific_ch)
-    create_diffreps_tracks(group_specific_ch)
+    // create_diffreps_tracks(group_specific_ch)
     create_group_combined_tracks(combined_bigwig_ch)
 
     track_lines = Channel.from(default_tracks)
-        .concat(create_diffreps_tracks.out,create_sample_specific_tracks.out.sid_tracks)
+        .concat(create_sample_specific_tracks.out.sid_tracks)
         .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text}
 
     combined_bw_track_lines = Channel.from(default_tracks)
-        .concat(create_diffreps_tracks.out,create_group_combined_tracks.out)
+        .concat(create_group_combined_tracks.out)
         .collectFile(name: 'autolimit_combined_tracks.txt', sort: 'index'){item -> item.text}
 
     // copy bb,bam,bw files to server
@@ -1000,11 +1006,11 @@ workflow {
     broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
     broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
     // bam_files=all_bams.map{it->[it[2],it[3]]}
-    diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[4]}
+    // diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[4]}
     combined_bwfiles=combine_bigwig_tracks.out.map{it->it[3]} 
 
     // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
-    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, diffreps_files, combined_bwfiles).collect()
+    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, combined_bwfiles).collect()
 
     if (params.copy_to_server_bool){
         copy_files_to_server(track_files_to_server,
@@ -1013,16 +1019,7 @@ workflow {
                              create_sample_specific_tracks.out.bigwig_hub)
     }
 
-    // calculate overlaps for all MACS2 narrow/broad and SICER peaks
-    // for each type of peaks create separate xlsx report
-    peaks_for_aggregation = macs2_callpeak.out.xls
-        .mix(macs2_callpeak.out.broad_xls)
-        .mix(epic2_callpeak.out.bed6)
-        .map{sid,bedfile -> bedfile}
-        .collect()
 
-    extradetailed_peaks_overlaps(peaks_for_aggregation, params.sample_labels_config)
-    
     //picard
     collect_metrics(all_bams)
     
