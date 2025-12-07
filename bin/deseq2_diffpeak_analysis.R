@@ -19,6 +19,8 @@ TREATMENT_SAMPLES <- argv$treatment_samples
 CONTROL_SAMPLES <- argv$control_samples
 OUTPUT_PREFIX <- argv$output_prefix
 
+log2FC_cutoff <- 1
+
 DEBUG <- FALSE
 if (DEBUG) {
   COVERAGE_FILE <- "/projectnb/wax-dk/max/src/rprojects/diffreps_manorm_deseq_overlap/Male_8wk_ATAC_vs_Female_8wk_ATAC_coverage.tsv" 
@@ -84,7 +86,7 @@ deseq2_output <- data.frame(
   Geneid = rownames(deseq2_results),
   pval = deseq2_results$pvalue,
   padj = deseq2_results$padj,
-  log2fc = deseq2_results$log2FoldChange,
+  log2FC = deseq2_results$log2FoldChange,
   stringsAsFactors = FALSE
 )
 
@@ -94,9 +96,19 @@ deseq2_output[c("start", "end")] <- lapply(deseq2_output[c("start", "end")], as.
 # Remove rows with NA values
 deseq2_output <- deseq2_output[complete.cases(deseq2_output), ]
 deseq2_output <- deseq2_output[order(deseq2_output$pval),]
-deseq2_output <- deseq2_output[c("seqnames","start","end","pval","padj","log2fc")]
+deseq2_output <- deseq2_output[c("seqnames","start","end","pval","padj","log2FC")]
 
-##deseq2_output <- subset(deseq2_output, padj < 0.05 & abs(log2fc) > 1, select = c(seqnames,start,end,log2fc,padj))
+## use pval column instead of padj if we do not have enough data
+pval_column <- ifelse(nrow(subset(deseq2_output, padj < 0.05)) < 100, "pval", "padj")
+print(paste0("Using ", pval_column))
+
+deseq2_output$delta <- NA
+deseq2_output$delta[deseq2_output$log2FC < 0 & abs(deseq2_output$log2FC) > log2FC_cutoff  & deseq2_output[[pval_column]] < 0.05] <- "1_Signif_sites"
+deseq2_output$delta[deseq2_output$log2FC < 0 & abs(deseq2_output$log2FC) <= log2FC_cutoff &  deseq2_output[[pval_column]] < 0.05] <- "2_Weakest_sites"
+deseq2_output$delta[deseq2_output$log2FC > 0 & abs(deseq2_output$log2FC) > log2FC_cutoff  & deseq2_output[[pval_column]] < 0.05] <- "4_Signif_sites"
+deseq2_output$delta[deseq2_output$log2FC > 0 & abs(deseq2_output$log2FC) <= log2FC_cutoff &  deseq2_output[[pval_column]] < 0.05] <- "3_Weakest_sites"
+deseq2_output <- deseq2_output[order(deseq2_output$delta), ]
+##deseq2_output <- subset(deseq2_output, padj < 0.05 & abs(log2FC) > 1, select = c(seqnames,start,end,log2FC,padj))
 # write.table(deseq2_output, 
 #             file = paste0(GROUP_ID,"_","DEseq2_SignifOnly.csv"),
 #             sep = ",", quote = FALSE, row.names = FALSE)

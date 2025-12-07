@@ -5,6 +5,7 @@ process calc_csaw {
     tag "${meta.group_name}"
     cpus 4
     time '4h'
+    memory '16 GB'
     // executor "local"
     
     beforeScript 'source $HOME/.bashrc'
@@ -59,5 +60,5 @@ workflow CSAW_MUMERGE {
     calc_csaw(input_params)
     
     emit:
-    deseq_results = calc_csaw.out
+    full_report = calc_csaw.out
 }

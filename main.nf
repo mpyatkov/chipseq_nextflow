@@ -654,7 +654,7 @@ process by_comparison_overlap {
 
 //aggregate all diffreps and manorm2 reports
 process all_comparisons_overlap {
-    tag "diffreps_manorm2_overlap_general"
+    tag "all_comparisons_overlap"
 
     executor 'sge'
     cpus 4
@@ -914,18 +914,22 @@ workflow {
         params.peakcaller
     )
 
-    diffreps_group_report_ch = DIFFREPS.out.full_report
+    // individual by comparison reports
+    by_comparisons_report_ch = DIFFREPS.out.full_report
+        .mix(DESEQ_MUMERGE.out.full_report)
+        .mix(CSAW_MUMERGE.out.full_report)
         .map{meta, rest -> [meta.group_name, rest]}
-        .groupTuple() 
+        .groupTuple()
 
-    by_comparison_overlap(diffreps_group_report_ch)
+    by_comparison_overlap(by_comparisons_report_ch)
 
-
-    // Aggregated report which contains all DIFFREPS and MANORM2 reports together
+    // Aggregated report which contains all comparisons together
     only_reports_ch  = DIFFREPS.out.full_report
+        .mix(DESEQ_MUMERGE.out.full_report)
+        .mix(CSAW_MUMERGE.out.full_report)
         .map{meta,rest -> rest}
         .collect()
-        
+
     all_comparisons_overlap(only_reports_ch)
 
     // Combine MAnorm2 and diffReps pdfs

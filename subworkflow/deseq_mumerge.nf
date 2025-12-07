@@ -88,5 +88,5 @@ workflow DESEQ_MUMERGE {
     calc_coverage(input_params) | calc_deseq2
     
     emit:
-    deseq_results = calc_deseq2.out
+    full_report = calc_deseq2.out
 }

@@ -1,6 +1,5 @@
 #!/usr/bin/env Rscript
 
-
 library(plyranges)
 library(argparser)
 library(readr)
@@ -21,21 +20,22 @@ print(argv)
 
 DEBUG <- F
 if (DEBUG) {
-  setwd("/projectnb/wax-dk/max/REFACTORING/work/85/a236663a8b35a1e0b4316851862d94")
+  setwd("/projectnb/wax-dk/max/REFACTORING/work/db/550abdc684866689712c64ae9584b6")
   argv$output_prefix <- "all_groups_together"
 }
 
-
-diffreps_df <- list.files(pattern = "DIFFREPS|RIPPM") %>%
+diffreps_df <- list.files(pattern = "*xlsx") %>%
   map_dfr(\(f){
-    readxl::read_xlsx(path = f, sheet = 2) %>%
+    
+    sheet_number <- ifelse(str_detect(f, "DEseq2"),1,2)
+    print(sheet_number)
+    
+    readxl::read_xlsx(path = f, sheet = sheet_number) %>%
       select(seqnames, start, end,log2FC, padj, delta) %>% 
-      filter(!is.na(delta) & padj < 0.05) %>%
+      filter(!is.na(delta)) %>%
       mutate(filename = f %>% tools::file_path_sans_ext()) 
   }) 
-# %>%  
-#   mutate(coords = as.character(str_glue("{seqnames}:{start}-{end}")))
-  
+
 ## split on upregulatation/downregulation
 df_plus <- diffreps_df %>% 
   filter(log2FC >= 0) %>% 
@@ -103,8 +103,10 @@ union_left_detailed <- union_left %>%
 
 #nm <- names(union_left) %>% keep(~str_detect(., "padj|log2FC"))
 ## set correct order for columns: MANORM2, DIFFREPS and RIPPM
-nm <- names(union_left_detailed) %>% keep(~str_detect(., "MANORM|DIFFREPS|RIPPM"))
-nm <- c(nm[grepl("DIFFREPS",nm)] %>% sort,
+nm <- names(union_left_detailed) %>% keep(~str_detect(., "DIFFREPS|RIPPM|DEseq2|CSAW"))
+nm <- c(nm[grepl("DEseq2",nm)] %>% sort,
+        nm[grepl("CSAW",nm)] %>% sort,
+        nm[grepl("DIFFREPS",nm)] %>% sort,
         nm[grepl("RIPPM",nm)] %>% sort)
 
 union_left_detailed <- union_left_detailed %>% 
@@ -119,8 +121,10 @@ union_left_presence <- union_left %>%
   pivot_wider(names_from = filename, values_from = delta, values_fill = NA)
 
 ## change order of columns
-nmp <- names(union_left_presence) %>% keep(~str_detect(., "MANORM|DIFFREPS|RIPPM"))
-nmp <- c(nmp[grepl("DIFFREPS",nmp)] %>% sort,
+nmp <- names(union_left_presence) %>% keep(~str_detect(., "DIFFREPS|RIPPM|DEseq2|CSAW"))
+nmp <- c(nmp[grepl("DEseq2",nmp)] %>% sort,
+         nmp[grepl("CSAW",nmp)] %>% sort,
+         nmp[grepl("DIFFREPS",nmp)] %>% sort,
          nmp[grepl("RIPPM",nmp)] %>% sort)
 union_left_presence <- union_left_presence %>% 
   relocate(all_of(nmp),.after = last_col())

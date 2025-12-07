@@ -33,6 +33,8 @@ CONTROL_SAMPLES <- argv$control_samples
 OUTPUT_PREFIX <- argv$output_prefix
 LIBRARY <- ifelse(argv$library == "paired","both","none")
 MUMERGE <- argv$mumerge
+
+log2FC_cutoff <- 1
   
 bam.files <- list.files(pattern = "*bam$")
 treatment_bam <- grep(TREATMENT_SAMPLES, bam.files, value = T)
@@ -120,7 +122,7 @@ all.results.df <- data.frame(
   end = end(merged$regions),
   pval = merged$combined$PValue,
   padj = merged$combined$FDR,
-  log2fc = results$table$logFC[merged$combined$rep.test], ## EdgeR logFC = log2FC
+  log2FC = results$table$logFC[merged$combined$rep.test], ## EdgeR logFC = log2FC
   #logCPM = results$table$logCPM[merged$combined$rep.test],
   #direction = merged$combined$direction,
   stringsAsFactors = FALSE
@@ -140,6 +142,18 @@ csaw_mu <- plyranges::join_overlap_left(mu %>% as_granges(),
                                         all.results.df %>% as_granges()) %>% 
   as_tibble() %>%
   drop_na()
+
+## use pval column instead of padj if we do not have enough data
+pval_column <- ifelse(nrow(subset(all.results.df, padj < 0.05)) < 100, "pval", "padj")
+print(paste0("Using ", pval_column))
+
+csaw_mu$delta <- NA
+csaw_mu$delta[csaw_mu$log2FC < 0 & abs(csaw_mu$log2FC) > log2FC_cutoff  & csaw_mu[[pval_column]] < 0.05] <- "1_Signif_sites"
+csaw_mu$delta[csaw_mu$log2FC < 0 & abs(csaw_mu$log2FC) <= log2FC_cutoff &  csaw_mu[[pval_column]] < 0.05] <- "2_Weakest_sites"
+csaw_mu$delta[csaw_mu$log2FC > 0 & abs(csaw_mu$log2FC) > log2FC_cutoff  & csaw_mu[[pval_column]] < 0.05] <- "4_Signif_sites"
+csaw_mu$delta[csaw_mu$log2FC > 0 & abs(csaw_mu$log2FC) <= log2FC_cutoff &  csaw_mu[[pval_column]] < 0.05] <- "3_Weakest_sites"
+csaw_mu <- csaw_mu[order(csaw_mu$delta), ]
+
 
 writexl::write_xlsx(list(
   CSAW = all.results.df,
