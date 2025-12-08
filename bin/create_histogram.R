@@ -44,53 +44,42 @@ if (DEBUG) {
   METHOD <- "DIFFREPS"
   WINDOW_SIZE <- "1000" 
   REPORT_NAME <- "2_DIFFREPS_1000_Male_8wk_ATAC_vs_Female_8wk_ATAC" 
-  DF.PATH <- "/projectnb/wax-dk/max/REFACTORING/work/c7/959e4a3d129d60bb594959ab658c87/Male_8wk_ATAC_vs_Female_8wk_ATAC_MuMerge_DIFFREPS_1000.xlsx"
+  DF.PATH <- "/projectnb/wax-dk/max/REFACTORING/work/3d/ec665642c843a5c8ab3f7abd46cce2/2_Male_3wk_ATAC_vs_Female_3wk_ATAC_MuMerge_RIPPM_200.xlsx"
 }
 
-sheet_number <- ifelse(str_detect(DF.PATH, "DEseq2"),1,2)
+sheet_number <- ifelse(str_detect(DF.PATH, "DESEQ2"),1,2)
 df <- readxl::read_xlsx(path = DF.PATH, sheet = sheet_number) %>%
   select(seqnames, start, end,log2FC, padj, delta) %>% 
+  mutate(log2FC = as.numeric(log2FC)) %>% 
   filter(!is.na(delta)) %>%
   mutate(filename = DF.PATH %>% tools::file_path_sans_ext()) 
 
 
-histogram_colors <- c("red","pink", "lightblue","blue")
-add_colors <- function(df_tmp, hist_colors) {
-  
-  df <- df_tmp %>% as_tibble()
-  delta.ord <- df %>% 
-    select(delta) %>% 
-    distinct() %>% 
-    arrange(delta) %>% 
-    mutate(ord = as.numeric(str_extract(delta, "\\d+"))) 
-  
-  hist.ord <- tibble(cols = hist_colors) %>% 
-    mutate(ord = row_number()) 
-  
-  delta.col <- left_join(x = delta.ord, y = hist.ord, join_by(ord)) %>% 
-    distinct() %>% 
-    arrange(ord) %>% 
-    select(-ord)
-  
-  left_join(df, delta.col, join_by(delta)) 
-  
-}
+histogram_colors <- tribble(
+  ~delta,        ~cols, ~order,
+  "DOWN_STRONG", "red",    1,
+  "DOWN_WEAK", "pink",     2,
+  "UP_WEAK", "lightblue",  3,
+  "UP_STRONG", "blue",     4
+)
 
-df.with_colors <- add_colors(df, histogram_colors)
+df.with_colors <- df %>% left_join(histogram_colors)
 
 
-df.xy <- df.with_colors %>% 
-  add_count(delta) %>% 
-  mutate(condition_name = case_when(str_detect(delta,"1_") ~ str_glue("1_{CONTROL_NAME} signif. sites"),
-                                    str_detect(delta,"2_") ~ str_glue("2_{CONTROL_NAME} weakest sites"),
-                                    str_detect(delta,"3_") ~ str_glue("3_{TREATMENT_NAME} weakest sites"),
-                                    .default = str_glue("4_{TREATMENT_NAME} signif. sites"))) %>% 
+## With XY chromosomes
+
+df.xy <- df.with_colors %>%
+  add_count(delta) %>%
+  mutate(condition_name = case_when(str_detect(delta,"DOWN_STRONG") ~ str_glue("1_{CONTROL_NAME} strong sites"),
+                                    str_detect(delta,"DOWN_WEAK") ~ str_glue("2_{CONTROL_NAME} weak sites"),
+                                    str_detect(delta,"UP_WEAK") ~ str_glue("3_{TREATMENT_NAME} weak sites"),
+                                    .default = str_glue("4_{TREATMENT_NAME} strong sites"))) %>%
   mutate(delta_factor = as.factor(str_glue("{condition_name} ({n})")))
 
 df.xy.arranged_colors <- df.xy %>% 
-  select(delta,cols) %>% 
+  select(cols, order) %>% 
   distinct() %>%
-  arrange(delta) %>% 
+  arrange(order) %>% 
   pull(cols) 
 
 
@@ -118,20 +107,22 @@ p.xy <- ggplot(df.xy, aes(x=log2FC, fill = delta_factor))+
         legend.text=element_text(size=10))
 
 
+## Without XY chromosomes
+
 df.noxy <- df.with_colors %>% filter(!str_detect(seqnames,"chrX|chrY")) %>% 
   add_count(delta) %>% 
   arrange(delta) %>% 
-  mutate(condition_name = case_when(str_detect(delta,"1_") ~ str_glue("1_{CONTROL_NAME} signif. sites"),
-                                    str_detect(delta,"2_") ~ str_glue("2_{CONTROL_NAME} weakest sites"),
-                                    str_detect(delta,"3_") ~ str_glue("3_{TREATMENT_NAME} weakest sites"),
-                                    .default = str_glue("4_{TREATMENT_NAME} signif. sites"))) %>%
+  mutate(condition_name = case_when(str_detect(delta,"DOWN_STRONG") ~ str_glue("1_{CONTROL_NAME} strong sites"),
+                                    str_detect(delta,"DOWN_WEAK") ~ str_glue("2_{CONTROL_NAME} weak sites"),
+                                    str_detect(delta,"UP_WEAK") ~ str_glue("3_{TREATMENT_NAME} weak sites"),
+                                    .default = str_glue("4_{TREATMENT_NAME} strong sites"))) %>%
   mutate(delta_factor = as.factor(str_glue("{condition_name} ({n})")))
 
 
 df.noxy.arranged_colors <- df.noxy %>% 
-  select(delta,cols) %>% 
+  select(cols, order) %>% 
   distinct() %>%
-  arrange(delta) %>% 
+  arrange(order) %>% 
   pull(cols) 
 
 CHROM <- "without XY chromosomes"

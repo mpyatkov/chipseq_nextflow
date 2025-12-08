@@ -1,14 +1,38 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+// process diffreps {
+//     tag "${meta.num}_${meta.method}_${meta.window}"
+    
+//     executor 'sge'
+//     cpus 16
+//     //cache false
+//     time '2h'
+//     // echo true
+
+//     beforeScript 'source $HOME/.bashrc'
+    
+//     input:
+//     tuple val(meta), path(TREATMENT_FILES), path(CONTROL_FILES), path(NORM_FILE)
+    
+//     output:
+//     tuple val(meta) , path("*_vs_*")
+
+//     shell:
+//     template 'diffreps.sh'
+// }
+
 process diffreps {
-    tag "${meta.num}"
+    tag "${meta.num}_${meta.method}_${meta.window_size}"
+    
     executor 'sge'
     cpus 16
     //cache false
     time '2h'
     // echo true
 
+    // debug true
+    
     beforeScript 'source $HOME/.bashrc'
     
     input:
@@ -17,8 +41,72 @@ process diffreps {
     output:
     tuple val(meta) , path("*_vs_*")
 
-    shell:
-    template 'diffreps.sh'
+    script:
+    """
+    set +eu
+    module load bedtools
+    module load miniconda
+    conda activate /projectnb/wax-es/routines/condaenv/perlenv
+    set -ue
+
+    frag_size=0
+
+    echo "${meta.method}_${meta.window_size}_${meta.report_name}"
+    
+    if [ "${meta.method}" == "RIPPM" ]; then
+
+    ##echo "Making normalization for RIPPM"
+    norm=\$(cat $NORM_FILE | \
+        grep -E "${meta.control_samples}|${meta.treatment_samples}" | \
+        awk '{ sum += \$3 } END { if (NR > 0) print sum / NR }')
+
+    control_norm_line=\$(cat ${NORM_FILE} | \
+	grep -v frag | \
+	cut -f1,3 | \
+        sort -t "M" -k2 -n | \
+        awk -v mnorm="\$norm" '{printf "%s %.2f\\n", \$1, \$2/mnorm}'| \
+        grep -E "${meta.control_samples}" | \
+        cut -d " " -f2 | \
+        paste -s -d " ")
+
+    treatment_norm_line=\$(cat ${NORM_FILE} | \
+	grep -v frag | \
+	cut -f1,3 | \
+        sort -t "M" -k2 -n | \
+        awk -v mnorm="\$norm" '{printf "%s %.2f\\n", \$1, \$2/mnorm}'| \
+        grep -E "${meta.treatment_samples}" | \
+        cut -d " " -f2 | \
+        paste -s -d " ")
+
+    echo "treatment \${treatment_norm_line}" > norm.txt
+    echo "control \${control_norm_line}" >> norm.txt
+    fi
+
+    num_ctrl_reps=\$(ls -1 *.bed | grep -E "${meta.control_samples}"  | sort -t "M" -k2 -n | wc -l)
+    ctrl_reps=\$(ls -1 *.bed | grep -E "${meta.control_samples}" | sort -t "M" -k2 -n | tr "\n" " " )
+
+    num_treatment_reps=\$(ls -1 *.bed | grep -E "${meta.treatment_samples}"  | sort -t "M" -k2 -n | wc -l)
+    treatment_reps=\$(ls -1 *.bed | grep -E "${meta.treatment_samples}" | sort -t "M" -k2 -n | tr "\n" " " )
+
+    norm_line=""
+    if [ "${meta.method}" == "RIPPM" ]; then
+    norm_line="--norm norm.txt"
+    fi
+
+    if [ "\${num_ctrl_reps}" == "1" ] || [ "\${num_treatment_reps}" == "1" ]; then
+    (set -x; time diffReps.pl --treatment \${treatment_reps} \
+        --control \${ctrl_reps} --report ${meta.report_name} \
+        --gname mm9 --window ${meta.window_size} --nsd broad\
+        --frag \${frag_size} --nproc $task.cpus --meth gt \${norm_line})
+    else
+
+    (set -x; time diffReps.pl --treatment \${treatment_reps} \
+        --control \${ctrl_reps} --report ${meta.report_name} \
+        --gname mm9 --window ${meta.window_size} --nsd broad\
+        --frag \${frag_size} --nproc $task.cpus \${norm_line})
+    fi
+    
+    """
 }
 
 process diffreps_summary {

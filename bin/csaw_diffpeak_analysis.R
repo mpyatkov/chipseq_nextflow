@@ -148,10 +148,10 @@ pval_column <- ifelse(nrow(subset(all.results.df, padj < 0.05)) < 100, "pval", "
 print(paste0("Using ", pval_column))
 
 csaw_mu$delta <- NA
-csaw_mu$delta[csaw_mu$log2FC < 0 & abs(csaw_mu$log2FC) > log2FC_cutoff  & csaw_mu[[pval_column]] < 0.05] <- "1_Signif_sites"
-csaw_mu$delta[csaw_mu$log2FC < 0 & abs(csaw_mu$log2FC) <= log2FC_cutoff &  csaw_mu[[pval_column]] < 0.05] <- "2_Weakest_sites"
-csaw_mu$delta[csaw_mu$log2FC > 0 & abs(csaw_mu$log2FC) > log2FC_cutoff  & csaw_mu[[pval_column]] < 0.05] <- "4_Signif_sites"
-csaw_mu$delta[csaw_mu$log2FC > 0 & abs(csaw_mu$log2FC) <= log2FC_cutoff &  csaw_mu[[pval_column]] < 0.05] <- "3_Weakest_sites"
+csaw_mu$delta[csaw_mu$log2FC < 0 & abs(csaw_mu$log2FC) > log2FC_cutoff  & csaw_mu[[pval_column]] < 0.05] <- "DOWN_STRONG"
+csaw_mu$delta[csaw_mu$log2FC < 0 & abs(csaw_mu$log2FC) <= log2FC_cutoff &  csaw_mu[[pval_column]] < 0.05] <- "DOWN_WEAK"
+csaw_mu$delta[csaw_mu$log2FC > 0 & abs(csaw_mu$log2FC) <= log2FC_cutoff &  csaw_mu[[pval_column]] < 0.05] <- "UP_WEAK"
+csaw_mu$delta[csaw_mu$log2FC > 0 & abs(csaw_mu$log2FC) > log2FC_cutoff  & csaw_mu[[pval_column]] < 0.05] <- "UP_STRONG"
 csaw_mu <- csaw_mu[order(csaw_mu$delta), ]
 
 

@@ -20,20 +20,22 @@ print(argv)
 
 DEBUG <- F
 if (DEBUG) {
-  setwd("/projectnb/wax-dk/max/REFACTORING/work/db/550abdc684866689712c64ae9584b6")
+  setwd("/projectnb/wax-dk/max/REFACTORING/work/79/80d932ed64be7a1cb91f4a978d01fe/")
   argv$output_prefix <- "all_groups_together"
 }
 
 diffreps_df <- list.files(pattern = "*xlsx") %>%
+  discard(~str_detect(.x,"all_groups")) %>% 
   map_dfr(\(f){
     
-    sheet_number <- ifelse(str_detect(f, "DEseq2"),1,2)
+    sheet_number <- ifelse(str_detect(f, "DESEQ2"),1,2)
     print(sheet_number)
     
     readxl::read_xlsx(path = f, sheet = sheet_number) %>%
       select(seqnames, start, end,log2FC, padj, delta) %>% 
       filter(!is.na(delta)) %>%
-      mutate(filename = f %>% tools::file_path_sans_ext()) 
+      mutate(filename = f %>% tools::file_path_sans_ext(),
+             log2FC = as.numeric(log2FC)) 
   }) 
 
 ## split on upregulatation/downregulation
@@ -65,7 +67,7 @@ union_plus <- union_plus %>%
   distinct() %>% 
   add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak
-  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) 
+  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "DOWN_STRONG|UP_STRONG")), .by = c(seqnames,start,end)) 
 
 ## union minus
 union_minus <- if (argv$output_prefix == "all_groups_together") {
@@ -84,7 +86,7 @@ union_minus <- union_minus %>%
   distinct() %>% 
   add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
   ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
-  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "1_|4_")), .by = c(seqnames,start,end)) 
+  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "DOWN_STRONG|UP_STRONG")), .by = c(seqnames,start,end)) 
 
 ## all together
 
@@ -101,13 +103,31 @@ union_left_detailed <- union_left %>%
   select(-delta) %>% 
   pivot_wider(names_from = filename, values_from = c(padj, log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
 
-#nm <- names(union_left) %>% keep(~str_detect(., "padj|log2FC"))
+
+
 ## set correct order for columns: MANORM2, DIFFREPS and RIPPM
-nm <- names(union_left_detailed) %>% keep(~str_detect(., "DIFFREPS|RIPPM|DEseq2|CSAW"))
-nm <- c(nm[grepl("DEseq2",nm)] %>% sort,
-        nm[grepl("CSAW",nm)] %>% sort,
-        nm[grepl("DIFFREPS",nm)] %>% sort,
-        nm[grepl("RIPPM",nm)] %>% sort)
+nm <- names(union_left_detailed) %>% keep(~str_detect(., "DIFFREPS|RIPPM|DESEQ2|CSAW"))
+# Extract unique comparison prefixes (e.g., "1_", "2_")
+comparisons <- unique(str_extract(nm, "^\\d+_+")) %>% sort()
+# For each comparison, append all methods in the desired order
+nm <- unlist(lapply(comparisons, function(comp) {
+  c(
+    nm[grepl(paste0("^", comp, ".*DESEQ2"), nm)] %>% sort,
+    nm[grepl(paste0("^", comp, ".*CSAW"), nm)] %>% sort,
+    nm[grepl(paste0("^", comp, ".*DIFFREPS_200"), nm)] %>% sort,
+    nm[grepl(paste0("^", comp, ".*RIPPM_200"), nm)] %>% sort,
+    nm[grepl(paste0("^", comp, ".*DIFFREPS_1000"), nm)] %>% sort,
+    nm[grepl(paste0("^", comp, ".*RIPPM_1000"), nm)] %>% sort
+  )
+}))
+
+# nm <- names(union_left_detailed) %>% keep(~str_detect(., "DIFFREPS|RIPPM|DESEQ2|CSAW"))
+# nm <- c(nm[grepl("DESEQ2",nm)] %>% sort,
+#         nm[grepl("CSAW",nm)] %>% sort,
+#         nm[grepl("DIFFREPS_200",nm)] %>% sort,
+#         nm[grepl("RIPPM_200",nm)] %>% sort,
+#         nm[grepl("DIFFREPS_1000",nm)] %>% sort,
+#         nm[grepl("RIPPM_1000",nm)] %>% sort)
 
 union_left_detailed <- union_left_detailed %>% 
   relocate(all_of(nm), .after = last_col())
@@ -121,11 +141,32 @@ union_left_presence <- union_left %>%
   pivot_wider(names_from = filename, values_from = delta, values_fill = NA)
 
 ## change order of columns
-nmp <- names(union_left_presence) %>% keep(~str_detect(., "DIFFREPS|RIPPM|DEseq2|CSAW"))
-nmp <- c(nmp[grepl("DEseq2",nmp)] %>% sort,
-         nmp[grepl("CSAW",nmp)] %>% sort,
-         nmp[grepl("DIFFREPS",nmp)] %>% sort,
-         nmp[grepl("RIPPM",nmp)] %>% sort)
+nmp <- names(union_left_presence) %>% keep(~str_detect(., "DIFFREPS|RIPPM|DESEQ2|CSAW"))
+# Extract unique comparison prefixes (e.g., "1_", "2_")
+comparisons <- unique(str_extract(nm, "^\\d+_+")) %>% sort()
+
+
+# For each comparison, append all methods in the desired order
+nmp <- unlist(lapply(comparisons, function(comp) {
+  c(
+    nmp[grepl(paste0("^", comp, ".*DESEQ2"), nmp)] %>% sort,
+    nmp[grepl(paste0("^", comp, ".*CSAW"), nmp)] %>% sort,
+    nmp[grepl(paste0("^", comp, ".*DIFFREPS_200"), nmp)] %>% sort,
+    nmp[grepl(paste0("^", comp, ".*RIPPM_200"), nmp)] %>% sort,
+    nmp[grepl(paste0("^", comp, ".*DIFFREPS_1000"), nmp)] %>% sort,
+    nmp[grepl(paste0("^", comp, ".*RIPPM_1000"), nmp)] %>% sort
+  )
+}))
+
+# 
+# nmp <- c(nmp[grepl("DESEQ2",nmp)] %>% sort,
+#          nmp[grepl("CSAW",nmp)] %>% sort,
+#          nmp[grepl("DIFFREPS200",nmp)] %>% sort,
+#          nmp[grepl("RIPPM200",nmp)] %>% sort,
+#          nmp[grepl("DIFFREPS1000",nmp)] %>% sort,
+#          nmp[grepl("RIPPM1000",nmp)] %>% sort)
+
+
 union_left_presence <- union_left_presence %>% 
   relocate(all_of(nmp),.after = last_col())
 
@@ -175,13 +216,28 @@ top25_down_noXY <- final %>%
   dplyr::slice_head(n = 25) %>% 
   select(chrom = seqnames, start, end, n_any_quality_overlaps, n_signif_quality_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
 
-writexl::write_xlsx(x = list(
-  METHODS_OVERLAP = final %>% select(-padj_sort, -log2fc_sort, -strand),
-  TOP25_UP = top25_up,
-  TOP25_DOWN = top25_down,
-  TOP25_UP_noXY = top25_up_noXY,
-  TOP25_DOWN_noXY = top25_down_noXY
-  ),
-  path = str_glue("{argv$output_prefix}_overlap.xlsx"))
 
+output_list <- if (argv$output_prefix == "all_groups_together") {
+  tmp <- list()
+  tmp[["METHODS_OVERLAP_ALL"]] <- final %>% select(-padj_sort, -log2fc_sort, -strand)
+  tmp[["TOP25_UP_ALL"]]  <- top25_up
+  tmp[["TOP25_DOWN_ALL"]]  <- top25_down
+  tmp[["TOP25_UP_noXY_ALL"]]  <- top25_up_noXY
+  tmp[["TOP25_DOWN_noXY_ALL"]]  <- top25_down_noXY
+  tmp
+} else {
+  tmp <- list()
+  tmp[["METHODS_OVERLAP"]] <- final %>% select(-padj_sort, -log2fc_sort, -strand)
+  tmp[["TOP25_UP"]]  <- top25_up
+  tmp[["TOP25_DOWN"]]  <- top25_down
+  tmp[["TOP25_UP_noXY"]]  <- top25_up_noXY
+  tmp[["TOP25_DOWN_noXY"]]  <- top25_down_noXY
+  tmp
+}
 
+writexl::write_xlsx(x = output_list, path = str_glue("{argv$output_prefix}_overlap.xlsx"))
+
+writexl::write_xlsx(x=top25_up, path = str_glue("{argv$output_prefix}_TOP25_UPREGULATED.xlsx"))
+writexl::write_xlsx(x=top25_down, path = str_glue("{argv$output_prefix}_TOP25_DOWNREGULATED.xlsx"))
+writexl::write_xlsx(x=top25_up_noXY, path = str_glue("{argv$output_prefix}_TOP25_NOXY_UPREGULATED.xlsx"))
+writexl::write_xlsx(x=top25_down_noXY, path = str_glue("{argv$output_prefix}_TOP25_NOXY_DOWNREGULATED.xlsx"))

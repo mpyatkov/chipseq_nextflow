@@ -11,8 +11,8 @@ params.peakcaller="MACS2"    // by default going to use MACS2 (SICER/EPIC2 alter
 params.macs2_model = false
 
 // method, window
-// for CSAW and DESEQ no window parameters
-methods = Channel.from(["DESEQ"],
+// for CSAW and DESEQ2 no window parameters
+methods = Channel.from(["DESEQ2"],
                        ["CSAW"],
                        ["DIFFREPS", 200],
                        ["DIFFREPS", 1000],
@@ -36,7 +36,7 @@ params.diffreps_config = file("$projectDir/${params.input_configs}/diffreps_conf
 params.overwrite_outputs = true
 
 include {MUMERGE} from './subworkflow/mumerge.nf'
-include {DESEQ_MUMERGE} from './subworkflow/deseq_mumerge.nf'
+include {DESEQ2_MUMERGE} from './subworkflow/deseq2_mumerge.nf'
 include {CSAW_MUMERGE} from './subworkflow/csaw_mumerge.nf'
 include {DIFFREPS} from './subworkflow/diffreps_mumerge.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
@@ -637,8 +637,8 @@ process retrieve_cached_bams {
 process by_comparison_overlap {
     tag "${group_name}"
     executor 'local'
-    publishDir path: "${params.output_dir}/summary/by_comparison_overlap/", mode: "copy", pattern: "*.xlsx", overwrite: true
-    
+    publishDir path: "${params.output_dir}/summary/by_comparison_overlap/", mode: "copy", pattern: "*_overlap.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/by_comparison_overlap/${group_name}_TOP25", mode: "copy", pattern: "*TOP25*.xlsx", overwrite: true
     beforeScript 'source $HOME/.bashrc'
     input:
     tuple val(group_name), path(diffreps_reports)
@@ -662,7 +662,9 @@ process all_comparisons_overlap {
     memory '32 GB'
     time '1h'
     // executor 'local'
-    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*_overlap.xlsx", overwrite: true
+    publishDir path: "${params.output_dir}/summary/all_groups_together_overlap_TOP25/", mode: "copy", pattern: "*TOP25*.xlsx", overwrite: true
+
     beforeScript 'source $HOME/.bashrc'
 
     input:
@@ -681,8 +683,11 @@ process all_comparisons_overlap {
 
 process extradetailed_macs2_epic_peaks_overlaps {
     
-    executor "local"
-    // echo true
+    executor 'sge'
+    cpus 4
+    memory '32 GB'
+    errorStrategy 'retry'
+    maxRetries 3
     
     beforeScript 'source $HOME/.bashrc'
     
@@ -767,7 +772,7 @@ def parse_diffreps_configuration(row) {
 
     window_size_str = meta.window_size == null ? "" : "_${meta.window_size}"
     meta.report_name = "${meta.num}_${meta.method}${window_size_str}_${meta.treatment_name}_vs_${meta.control_name}"
-    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
+    meta.group_name = "${meta.num}_${meta.treatment_name}_vs_${meta.control_name}"
     return meta
 }
 
@@ -779,7 +784,7 @@ def parse_comparisons_configuration(row) {
     meta.control_name      = row[2].trim()
     meta.treatment_samples = row[3].trim()
     meta.control_samples   = row[4].trim()
-    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
+    meta.group_name = "${meta.num}_${meta.treatment_name}_vs_${meta.control_name}"
     return meta
 }
 
@@ -805,7 +810,7 @@ workflow {
         .map{it->parse_diffreps_configuration(it)}
         .branch {
             diffreps: it.method =~"DIFFREPS|RIPPM"
-            deseq: it.method =~"DESEQ"
+            deseq2: it.method =~"DESEQ2"
             csaw: it.method =~"CSAW"
         }
 
@@ -882,8 +887,20 @@ workflow {
 
     MUMERGE(comparisons, mumerge_peaks)
 
+    DESEQ2_MUMERGE(
+        diffreps_final.deseq2,
+        all_bams,
+        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
+    )
+
+    CSAW_MUMERGE(
+        diffreps_final.csaw,
+        all_bams,
+        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
+    )
+        
     RIPPM_NORM_FACTORS(MUMERGE.out.mumerge_overlap, bam_count.out.fragments)
-    
+
     DIFFREPS(
         // parse_configuration_xls.out.diffreps_config,
         diffreps_final.diffreps,
@@ -897,18 +914,6 @@ workflow {
         MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
 
-    DESEQ_MUMERGE(
-        diffreps_final.deseq,
-        all_bams,
-        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
-    )
-
-    CSAW_MUMERGE(
-        diffreps_final.csaw,
-        all_bams,
-        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
-    )
-    
     QUALITY_PCA(
         comparisons,
         quality_control_peaks,
@@ -917,7 +922,7 @@ workflow {
 
     // individual by comparison reports
     by_comparisons_report_ch = DIFFREPS.out.full_report
-        .mix(DESEQ_MUMERGE.out.full_report)
+        .mix(DESEQ2_MUMERGE.out.full_report)
         .mix(CSAW_MUMERGE.out.full_report)
         .map{meta, rest -> [meta.group_name, rest]}
         .groupTuple()
@@ -926,17 +931,16 @@ workflow {
 
     // Aggregated report which contains all comparisons together
     only_reports_ch  = DIFFREPS.out.full_report
-        .mix(DESEQ_MUMERGE.out.full_report)
+        .mix(DESEQ2_MUMERGE.out.full_report)
         .mix(CSAW_MUMERGE.out.full_report)
         .map{meta,rest -> rest}
         .collect()
 
     all_comparisons_overlap(only_reports_ch)
 
-
     // Create histograms
     histograms_ch = DIFFREPS.out.full_report
-        .mix(DESEQ_MUMERGE.out.full_report)
+        .mix(DESEQ2_MUMERGE.out.full_report)
         .mix(CSAW_MUMERGE.out.full_report)
 
     CREATE_HISTOGRAMS(histograms_ch)

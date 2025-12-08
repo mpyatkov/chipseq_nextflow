@@ -103,15 +103,12 @@ pval_column <- ifelse(nrow(subset(deseq2_output, padj < 0.05)) < 100, "pval", "p
 print(paste0("Using ", pval_column))
 
 deseq2_output$delta <- NA
-deseq2_output$delta[deseq2_output$log2FC < 0 & abs(deseq2_output$log2FC) > log2FC_cutoff  & deseq2_output[[pval_column]] < 0.05] <- "1_Signif_sites"
-deseq2_output$delta[deseq2_output$log2FC < 0 & abs(deseq2_output$log2FC) <= log2FC_cutoff &  deseq2_output[[pval_column]] < 0.05] <- "2_Weakest_sites"
-deseq2_output$delta[deseq2_output$log2FC > 0 & abs(deseq2_output$log2FC) > log2FC_cutoff  & deseq2_output[[pval_column]] < 0.05] <- "4_Signif_sites"
-deseq2_output$delta[deseq2_output$log2FC > 0 & abs(deseq2_output$log2FC) <= log2FC_cutoff &  deseq2_output[[pval_column]] < 0.05] <- "3_Weakest_sites"
+deseq2_output$delta[deseq2_output$log2FC < 0 & abs(deseq2_output$log2FC) > log2FC_cutoff  & deseq2_output[[pval_column]] < 0.05] <- "DOWN_STRONG"
+deseq2_output$delta[deseq2_output$log2FC < 0 & abs(deseq2_output$log2FC) <= log2FC_cutoff &  deseq2_output[[pval_column]] < 0.05] <- "DOWN_WEAK"
+deseq2_output$delta[deseq2_output$log2FC > 0 & abs(deseq2_output$log2FC) <= log2FC_cutoff &  deseq2_output[[pval_column]] < 0.05] <- "UP_WEAK"
+deseq2_output$delta[deseq2_output$log2FC > 0 & abs(deseq2_output$log2FC) > log2FC_cutoff  & deseq2_output[[pval_column]] < 0.05] <- "UP_STRONG"
+
 deseq2_output <- deseq2_output[order(deseq2_output$delta), ]
-##deseq2_output <- subset(deseq2_output, padj < 0.05 & abs(log2FC) > 1, select = c(seqnames,start,end,log2FC,padj))
-# write.table(deseq2_output, 
-#             file = paste0(GROUP_ID,"_","DEseq2_SignifOnly.csv"),
-#             sep = ",", quote = FALSE, row.names = FALSE)
 
 xlsx_output_name<-paste0(OUTPUT_PREFIX,".xlsx")
 writexl::write_xlsx(list(

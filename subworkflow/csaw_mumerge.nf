@@ -6,7 +6,6 @@ process calc_csaw {
     cpus 4
     time '4h'
     memory '16 GB'
-    // executor "local"
     
     beforeScript 'source $HOME/.bashrc'
     publishDir path: "${params.output_dir}/csaw_output/", mode: "copy", pattern: "*.xlsx", overwrite: true
@@ -22,7 +21,7 @@ process calc_csaw {
 
     """
     module load R/${params.rversion}
-
+ 
     csaw_diffpeak_analysis.R --control_samples "${meta.control_samples}" \
         --treatment_samples "${meta.treatment_samples}" \
         --library "${meta.library}" \

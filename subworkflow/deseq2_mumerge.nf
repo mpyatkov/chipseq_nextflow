@@ -48,7 +48,7 @@ process calc_deseq2 {
     tuple val(meta), path("*.xlsx")
 
     script:
-    output_prefix="${meta.group_name}_MuMerge_DEseq2"
+    output_prefix="${meta.group_name}_MuMerge_DESEQ2"
 
     """
     module load R/${params.rversion}
@@ -60,7 +60,7 @@ process calc_deseq2 {
     """
 }
 
-workflow DESEQ_MUMERGE {
+workflow DESEQ2_MUMERGE {
     take:
     diffreps_config
     bams

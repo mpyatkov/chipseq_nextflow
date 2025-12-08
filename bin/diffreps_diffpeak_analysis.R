@@ -49,10 +49,10 @@ if (DEBUG){
 ######## load diffReps output annotated or "with header" files
 diffreps.df <- read_tsv(annotated_path, col_names = T, comment = "#") %>% 
   dplyr::rename(seqnames = Chrom, start = Start, end = End) %>% 
-  mutate(delta = case_when(Event == "Down" & abs(log2FC) > log2fc_cutoff & Control.avg > min_avg_count & padj < 0.05  ~ "1_Signif_sites", 
-                           Event == "Down" & abs(log2FC) <= log2fc_cutoff & Control.avg > min_avg_count & padj < 0.05 ~ "2_Weakest_sites", 
-                           Event == "Up" & abs(log2FC) > log2fc_cutoff & Treatment.avg > min_avg_count & padj < 0.05 ~ "4_Signif_sites", 
-                           Event == "Up" & abs(log2FC) <= log2fc_cutoff & Treatment.avg > min_avg_count & padj < 0.05 ~ "3_Weakest_sites",
+  mutate(delta = case_when(Event == "Down" & abs(log2FC) > log2fc_cutoff & Control.avg > min_avg_count & padj < 0.05  ~ "DOWN_STRONG", 
+                           Event == "Down" & abs(log2FC) <= log2fc_cutoff & Control.avg > min_avg_count & padj < 0.05 ~ "DOWN_WEAK", 
+                           Event == "Up" & abs(log2FC) > log2fc_cutoff & Treatment.avg > min_avg_count & padj < 0.05 ~ "UP_STRONG", 
+                           Event == "Up" & abs(log2FC) <= log2fc_cutoff & Treatment.avg > min_avg_count & padj < 0.05 ~ "UP_WEAK",
                            #abs(log2FC) > log2fc_cutoff ~ "0_Low_reads_sites", 
                            .default = NA)) 
 
