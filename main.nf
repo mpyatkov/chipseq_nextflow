@@ -41,6 +41,7 @@ include {CSAW_MUMERGE} from './subworkflow/csaw_mumerge.nf'
 include {DIFFREPS} from './subworkflow/diffreps_mumerge.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
 include {COMBINE_HIST_PDF} from './subworkflow/combine_hist_pdf.nf'
+include {CREATE_HISTOGRAMS} from './subworkflow/create_histograms.nf'
 include {RIPPM_NORM_FACTORS} from './subworkflow/rippm_norm_factors.nf'
 
 process trim_adapters {
@@ -89,7 +90,7 @@ process bowtie2_align {
     // executor "local"
     cpus 16
     memory '32 GB'
-    debug true
+    // debug true
     beforeScript 'source $HOME/.bashrc'
 
     // put to cache without overwrite
@@ -932,12 +933,14 @@ workflow {
 
     all_comparisons_overlap(only_reports_ch)
 
-    // Combine MAnorm2 and diffReps pdfs
-    // COMBINE_HIST_PDF (
-    //     DIFFREPS.out.aggregated_histograms_diffreps_noxy,    
-    //     DIFFREPS.out.aggregated_histograms_diffreps_allchr,
-    // )
-  
+
+    // Create histograms
+    histograms_ch = DIFFREPS.out.full_report
+        .mix(DESEQ_MUMERGE.out.full_report)
+        .mix(CSAW_MUMERGE.out.full_report)
+
+    CREATE_HISTOGRAMS(histograms_ch)
+    
     // TRACKS (copying, generating track lines)
     sid_normfact_ch = RIPPM_NORM_FACTORS.out.norm_factors.splitCsv(sep: "\t")
         .map{it->[it[0],it[4]]}
