@@ -4,7 +4,7 @@ library(argparser)
 
 ParseArguments <- function() {
     p <- arg_parser('Parsing diffReps output')
-    p <- add_argument(p,'--pattern', default="diffReps_", help="search pattern for diffReps output files")
+    p <- add_argument(p,'--pattern', default="_vs_", help="search pattern for diffReps output files")
     p <- add_argument(p, '--path', default="../", help="path to the dir which contains diffReps output directories")
     p <- add_argument(p, '--rippm_report', default="Norm_Factors.tsv", help="path to the file with rippm stats")
     p <- add_argument(p, '--fastq_num_reads', default="numreads.csv", help="path to the file with rippm stats")
@@ -16,9 +16,9 @@ argv <- ParseArguments()
 
 DEBUG <- FALSE
 if (DEBUG){
-  setwd("/projectnb/wax-dk/max/G225/work/8c/5f7bd8bcd5fb8715735449bc37389f")
+  setwd("/projectnb/wax-dk/max/REFACTORING/work/b5/5710b9115798de703ce30594efce5e")
   argv$path <- "./"
-  argv$fastq_num_reads <- "/projectnb/wax-dk/max/G225/work/tmp/f6/f86064f81022d98eb2cadd37bbcaff/numreads.txt"
+  #argv$fastq_num_reads <- "/projectnb/wax-dk/max/G225/work/tmp/f6/f86064f81022d98eb2cadd37bbcaff/numreads.txt"
 }
 
 library(stringr)
@@ -34,8 +34,9 @@ rippm_report <- read_tsv(argv$rippm_report, col_names = T) %>%
 ## raw reads from from R1 files for each sample
 fastq_num_reads <- read_csv(argv$fastq_num_reads, col_names = T)
 
-files <- list.files(path = argv$path, pattern = argv$pattern, recursive = T, full.names = T) %>% 
-    keep(function(x){str_detect(x,"\\.vs\\.") && str_detect(x,"annotated|hotspot", negate = T)})
+files <- list.files(path = argv$path, pattern = argv$pattern, recursive = T, full.names = T)
+#%>% 
+#    keep(function(x){str_detect(x,"_vs_") && str_detect(x,"annotated|hotspot", negate = T)})
 
 ## What we need to parse (diffReps output)
 # Treatment files: G220M03_fragments.bed        G220M04_fragments.bed
@@ -53,16 +54,20 @@ extract_tab_separated <- function(header, tag) {
 
 parse_diffreps_file <- function(f, header) {
   normalization_caller <- ifelse(str_detect(f,"RIPPM"), "RIPPM","DIFFREPS")
-  conditions <- basename(f) %>% str_replace("diffReps_","") %>% str_split(".vs.|_RIPPM|_DIFFREPS", simplify = T)
-  cond_tr <- conditions[1]
-  cond_ctrl <- conditions[2]
+  
+  ## extract conditions from filename
+  prefix <- str_extract(basename(f),"(\\d+_[A-Za-z]+_\\d+_)")
+  fname_no_prefix <- basename(f) %>% str_replace(prefix,"")
+  cond_tr <- fname_no_prefix %>% str_extract("([[:print:]]+)(?=_vs_)")
+  cond_ctrl <- fname_no_prefix %>% str_extract("(?<=_vs_)([[:print:]]+)")
+  
   tr_files <- extract_tab_separated(header, "Treatment files") %>% str_replace("_frag[[:print:]]+", "")
   ctrl_files <- extract_tab_separated(header, "Control files") %>% str_replace("_frag[[:print:]]+", "")
   window <- extract_tab_separated(header, "Window size")
   norm_tr <- extract_tab_separated(header, "Treatment normalization constant")
   norm_ctrl <- extract_tab_separated(header, "Control normalization constant")
   tibble(
-      fname = basename(f) %>% str_split(.,"_RIPPM|_DIFFREPS",simplify = T) %>% .[1],
+      fname = fname_no_prefix,#basename(f), #%>% str_split(.,"_RIPPM|_DIFFREPS",simplify = T) %>% .[1],
       group = c(rep("TREATMENT", length(tr_files)), rep("CONTROL", length(ctrl_files))),
       condition = c(rep(cond_tr, length(tr_files)), rep(cond_ctrl, length(ctrl_files))),
       sample_id = c(tr_files, ctrl_files),

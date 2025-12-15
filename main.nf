@@ -830,7 +830,8 @@ workflow {
     fastq_for_mapping = trim_adapters(bam_cache_status.uncached.map{it-> it[0..4]}) 
     
     // Make QC analysis (only for uncached, it will work because of storeDir)
-    fastqc(fastq_for_mapping) // calculate fastqc only for new samples with trimmed adapters 
+    // fastqc(fastq_for_mapping) // calculate fastqc only for new samples with trimmed adapters
+    fastqc(fastq_records)
 
     // Calculate number of reads in fastq files  (only for uncached)
     fq_num_reads = fastqc.out.raw_reads  
@@ -863,6 +864,9 @@ workflow {
     macs2_callpeak(all_bams, mm9_chrom_sizes)
     epic2_callpeak(bam_count.out.fragments_bed6, mm9_chrom_sizes)
 
+    //picard
+    collect_metrics(all_bams)
+    
     // calculate overlaps for all MACS2 narrow/broad and SICER peaks
     // for each type of peaks create separate xlsx report
     peaks_for_aggregation = macs2_callpeak.out.xls
@@ -1031,9 +1035,6 @@ workflow {
     }
 
 
-    //picard
-    collect_metrics(all_bams)
-    
     multiqc(
         fastqc.out.zip.map{it -> it[1]}.collect(),
         all_bowtie2_logs.map{it -> it[1]}.collect(),
@@ -1041,7 +1042,5 @@ workflow {
         macs2_callpeak.out.xls.map{it -> it[1]}.collect(),
         collect_metrics.out.metrics.map{it -> it[1]}.collect()
     )
-
-    multiqc.out.report
 }
 
