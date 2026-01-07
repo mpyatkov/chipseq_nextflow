@@ -360,7 +360,8 @@ process collect_metrics {
     tag "${sample_id}"
     cpus 1
     memory '16 GB'
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/", mode: "copy", overwrite: true
+    
+    storeDir "${params.chipseq_bam_cache}/${sample_id}/metrics/"
 
     beforeScript 'source $HOME/.bashrc'
     
