@@ -89,15 +89,11 @@ process bowtie2_align {
 
     tag "${sample_id}"
     
-    //echo true
-    // executor "local"
     cpus 16
     memory '32 GB'
-    // debug true
     beforeScript 'source $HOME/.bashrc'
 
     // put to cache without overwrite
-
     publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}_sorted_filtered.bam*", overwrite: false
     publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}.bowtie2.log", overwrite: false
     
@@ -365,7 +361,6 @@ process collect_metrics {
 
     beforeScript 'source $HOME/.bashrc'
     
-    // echo true
     input:
     tuple val(sample_id), val(library), path(bam), path(bai)
     
@@ -412,7 +407,6 @@ process fastqc {
     
     beforeScript 'source $HOME/.bashrc'
     
-    // echo true
     input:
     tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
     
@@ -463,7 +457,6 @@ process multiqc {
     path(bam_count_stats) // samtools stats
     path(macs2_xls)       // MACS2 xls files
     path(picard)          // picard files
-    // echo true
     
     output:
     path "*multiqc_report.html", emit: report
@@ -610,7 +603,6 @@ process combine_mn2_dr_pdfs {
     executor "local"
     beforeScript 'source $HOME/.bashrc'
     publishDir path: "${params.output_dir}/summary/Histograms/", mode: "copy", pattern: "*.pdf", overwrite: true
-    // echo true
 
     input:
     tuple val(group_name), path(diffreps_pdfs), path(manorm2_pdf)
@@ -701,7 +693,7 @@ workflow {
     fq_num_reads = fastqc.out.raw_reads  
         .map{it -> it[1]}
         .collectFile(name: "numreads.csv", keepHeader: true)
-        
+
     bowtie2_align(fastq_for_mapping, mm9_black_complement)
     
     // Combine newly generated BAMs with cached BAMs
