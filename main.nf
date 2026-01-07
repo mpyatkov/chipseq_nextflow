@@ -97,8 +97,6 @@ process bowtie2_align {
 
     publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}_sorted_filtered.bam*", overwrite: false
     publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}.bowtie2.log", overwrite: false
-    // publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
-    // publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "copy", pattern: "*.log", overwrite: true
     
     input:
     tuple val(sample_id), val(library), val(downsample), path(r1), path(r2)
@@ -440,19 +438,13 @@ process epic2_callpeak {
 
 process copy_files_to_server {
     executor 'local'
-    // publishDir path: "${data_path}", mode: "copy", pattern: "*.{bw,bam*,bb}", overwrite: false
-    // publishDir path: "${data_path}/TRACK_LINES", mode: "copy", pattern: "*.txt", overwrite: true
-    
+   
     input:
     path(files)
     path(track_lines)
     path(combined_track_lines)
     path(track_hub)
 
-    // output:
-    // path("*.{bw,bam,bai,bb,txt}")
-    // stdout
-    
     script:
     data_path="/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}"
     """
@@ -790,11 +782,6 @@ def parse_comparisons_configuration(row) {
 
 
 workflow {
-    // parse_configuration_xls(params.xlsx_config)
-    // parse_configuration_xls.out.sample_labels_config | view
-    // parse_configuration_xls.out.diffreps_config | view
-    // test = parse_configuration_xls.out.diffreps_config.ifEmpty(false)
-    // .ifEmpty{exit 1, "Cannot find any input RDS files for Module 3"}
 
     fastq_config_ch = Channel.from(params.fastq_config)
     sample_labels_config_ch = Channel.from(params.sample_labels_config)
@@ -906,7 +893,6 @@ workflow {
     RIPPM_NORM_FACTORS(MUMERGE.out.mumerge_overlap, bam_count.out.fragments)
 
     DIFFREPS(
-        // parse_configuration_xls.out.diffreps_config,
         diffreps_final.diffreps,
         // parse_configuration_xls.out.sample_labels_config,
         sample_labels_config_ch,
