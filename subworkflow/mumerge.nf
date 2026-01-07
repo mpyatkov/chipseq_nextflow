@@ -1,17 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-def parse_config(row) {
-    def meta = [:]
-    meta.treatment_name    = row[1].trim()
-    meta.control_name      = row[2].trim()
-    meta.treatment_samples = row[3].trim()
-    meta.control_samples   = row[4].trim()
-    meta.group_name = "${meta.treatment_name}_vs_${meta.control_name}"
-
-    return meta
-}
-
 process mumerge {
     tag "${group_name}"
     cpus 8
