@@ -42,7 +42,10 @@ include {DIFFREPS} from './subworkflow/diffreps_mumerge.nf'
 include {QUALITY_PCA} from './subworkflow/quality_pca.nf'
 include {COMBINE_HIST_PDF} from './subworkflow/combine_hist_pdf.nf'
 include {CREATE_HISTOGRAMS} from './subworkflow/create_histograms.nf'
+include {CREATE_BYCOMPARISON_TRACKS} from './subworkflow/create_bycomparison_tracks.nf'
 include {RIPPM_NORM_FACTORS} from './subworkflow/rippm_norm_factors.nf'
+include {CREATE_BIGWIG_FILES} from './subworkflow/create_bigwig_files.nf'
+include {CREATE_TRACKLINES} from './subworkflow/create_tracklines.nf'
 
 process trim_adapters {
     tag "${sample_id}"
@@ -282,106 +285,6 @@ process macs2_callpeak {
     """
 }
 
-process create_bigwig_files {
-
-    tag "${sample_id}"
-    executor 'sge'
-    cpus 1
-    time '1h'
-    memory '16 GB'
-
-    beforeScript 'source $HOME/.bashrc'
-    
-    input:
-    tuple val(sample_id), path(fragments), val(norm_factor)
-    path(mm9_chrom_sizes)
-    
-    output:
-    tuple val(sample_id), path("*.bw")
-    
-    script:
-    """
-    module load bedtools
-    module load ucscutils
-
-    bedtools sort -i ${fragments} > tmp.sorted.bed
-    bedtools genomecov -bg -i tmp.sorted.bed -g ${mm9_chrom_sizes} > tmp.bedGraph
-    sed -i '/track/d;/random/d;/chrM/d' tmp.bedGraph
-    awk -v OFS='\t' -v norm_factor="${norm_factor}" '{print \$1, \$2, \$3, \$4 * norm_factor}' "tmp.bedGraph" > "tmp.norm.bedGraph"
-    bedGraphToBigWig "tmp.norm.bedGraph" ${mm9_chrom_sizes} "${sample_id}_RiPPM_norm.bw"
-    """
-}
-
-process create_group_combined_tracks {
-    executor 'local'
-
-    input:
-    path(group_tracks)
-
-    output:
-    path("bw_combined_tracks.txt")
-
-    script:
-    data_path="${workflow.userName}/${params.dataset_label}"
-
-    """
-    module load R/${params.rversion}
-    generate_bw_combined_tracks.R \
-        --combined_tracks ${group_tracks} \
-        --data_path ${data_path} \
-        --output_name "bw_combined_tracks.txt"
-    """
-}
-
-process create_sample_specific_tracks {
-    executor 'local'
-    
-    input:
-    tuple path(sid_tracks), path(sample_labels)//, path(files)
-
-    output:
-    path("sid_tracks.txt"), emit: sid_tracks
-    path("all_bigwig_group_autoscale_hub.txt"), emit: bigwig_hub
-
-    script:
-    data_path="${workflow.userName}/${params.dataset_label}"
-    
-    """
-    module load R/${params.rversion}
-    generate_sid_tracks.R \
-        --sample_labels ${sample_labels} \
-        --sid_tracks ${sid_tracks} \
-        --data_path ${data_path} \
-        --output_name "sid_tracks.txt" \
-        --peakcaller ${params.peakcaller}
-
-    ## create all_bigwig_group_autoscale_hub.txt
-    convert_tohub.py ${params.dataset_label} ./bigwig_for_hub.csv
-    """
-}
-
-process create_diffreps_tracks {
-    executor 'local'
-    //publishDir copy to server
-    input:
-    tuple path(diffreps_tracks), path(diffreps_config)
-
-    output:
-    path("diffreps_tracks.txt")
-
-    script:
-    data_path="${workflow.userName}/${params.dataset_label}"
-    
-    """
-    module load R/${params.rversion}
-    generate_diffreps_tracks.R \
-        --diffreps_config ${diffreps_config} \
-        --diffreps_tracks ${diffreps_tracks} \
-        --data_path ${data_path} \
-        --output_name "diffreps_tracks.txt"
-    """
-}
-
 process epic2_callpeak {
     tag "${sample_id}"
     
@@ -443,14 +346,13 @@ process copy_files_to_server {
     path(files)
     path(track_lines)
     path(combined_track_lines)
-    path(track_hub)
 
     script:
     data_path="/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}"
     """
     mkdir -p ${data_path}/TRACK_LINES
     cp ${files} ${data_path}
-    cp ${track_lines} ${track_hub} ${combined_track_lines} ${data_path}/TRACK_LINES/
+    cp ${track_lines} ${combined_track_lines} ${data_path}/TRACK_LINES/
     """
 }
 
@@ -724,32 +626,6 @@ process combine_mn2_dr_pdfs {
     """
 }
 
-process combine_bigwig_tracks {
-    tag "${group_name}"
-
-    executor 'sge'
-    cpus 8
-    memory '16 GB'
-    time '2h'
-
-    beforeScript 'source $HOME/.bashrc'
-    // echo true
-
-    input:
-    tuple val(group_name), val(samples_string), val(color), path(sample_paths)
-    path(mm9_chrom_sizes)
-    
-    output:
-    tuple val(group_name), val(samples_string), val(color), path("${group_name}.bw")
-
-    script:
-    """
-    ## for wiggletools
-    module load miniconda
-    conda activate /projectnb/wax-es/routines/condaenv/deeptools
-    bigwigAverage -p $task.cpus -b *.bw -o "${group_name}.bw"
-    """
-}
 
 def parse_diffreps_configuration(row) {
     def meta = [:]
@@ -894,12 +770,8 @@ workflow {
 
     DIFFREPS(
         diffreps_final.diffreps,
-        // parse_configuration_xls.out.sample_labels_config,
-        sample_labels_config_ch,
         bam_count.out.fragments_bed6,
         RIPPM_NORM_FACTORS.out.norm_factors,
-        extra_columns, //macs2_callpeak.out.xls
-        mm9_chrom_sizes,
         fq_num_reads, // table with number of reads in R1.fq files for each sample
         MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
     )
@@ -929,95 +801,65 @@ workflow {
     all_comparisons_overlap(only_reports_ch)
 
     // Create histograms
-    histograms_ch = DIFFREPS.out.full_report
+    combined_diffpeak_reports_ch = DIFFREPS.out.full_report
         .mix(DESEQ2_MUMERGE.out.full_report)
         .mix(CSAW_MUMERGE.out.full_report)
 
-    CREATE_HISTOGRAMS(histograms_ch)
+    CREATE_HISTOGRAMS(combined_diffpeak_reports_ch)
+
+    CREATE_BIGWIG_FILES(
+        RIPPM_NORM_FACTORS.out.norm_factors,
+        bam_count.out.fragments,
+        sample_labels_config_ch,
+        mm9_chrom_sizes
+    )
+
+    CREATE_BYCOMPARISON_TRACKS(
+        combined_diffpeak_reports_ch,
+        MUMERGE.out.mumerge_peaks,
+        mm9_chrom_sizes)
     
-    // TRACKS (copying, generating track lines)
-    sid_normfact_ch = RIPPM_NORM_FACTORS.out.norm_factors.splitCsv(sep: "\t")
-        .map{it->[it[0],it[4]]}
-    
-    sid_fr_norm = bam_count.out.fragments
-        .join(sid_normfact_ch)
+    // CREATE_BYCOMPARISON_TRACKS.out.tracks | view
+    //     .mix(MUMERGE.out.mumerge_peaks)
+    //     .groupTuple() | view
 
-    // Combine bigWig files for one group into one track
-    create_bigwig_files(sid_fr_norm, mm9_chrom_sizes)
-    bigwig_group_ch = sample_labels_config_ch
-        .splitCsv()
-        .join(create_bigwig_files.out)
-        .map{sid,n1,id1,n2,r,g,b,pth -> 
-             [n2, sid, "${r}__${g}__${b}", pth]
-        }
-        .groupTuple() 
-        .map{group_name, sids, colors, paths ->
-            def new_sids = sids.collect{it -> it.toString()}.sort().join("__") 
-            return [group_name, new_sids, colors[1], paths]
-        } 
+    CREATE_TRACKLINES(
+        CREATE_BIGWIG_FILES.out.individual
+            .mix(macs2_callpeak.out.broad_bb)
+            .mix(macs2_callpeak.out.narrow_bb)
+            .mix(epic2_callpeak.out.epic2_bb), // Individual tracks by sample_id
 
-    combine_bigwig_tracks(bigwig_group_ch, mm9_chrom_sizes)
-    combined_bigwig_ch = combine_bigwig_tracks.out
-        .map{group_name,samples_str,color,pth -> [group_name, samples_str, color, pth.getName()]}
-        .collectFile{item -> item.join(",")+'\n'}    
+        CREATE_BIGWIG_FILES.out.grouped, //Bigwig combined for each group 
+        
+        CREATE_BYCOMPARISON_TRACKS.out.tracks, //DIFFREPS,CSAW,..,MUMERGE by comparison
 
-    // create track lines (sample specific)
-    sid_specific_ch = create_bigwig_files.out
-        .mix(macs2_callpeak.out.broad_bb)
-        .mix(macs2_callpeak.out.narrow_bb)
-        .mix(epic2_callpeak.out.epic2_bb)
-        //.mix(bam_count.out.final_bam.map{it->[it[0],it[2]]}) //excluded bam track lines
-        .map{it->[it[0], it[1].getName()]}
-        .collectFile{item -> item.join(",")+'\n'}
-        .combine(sample_labels_config_ch)
-
-    // create track lines (group specific)
-    diffreps_tmp_file = diffreps_final.diffreps
-        .map{item->[item.num,
-                    item.treatment_name,
-                    item.control_name,
-                    item.treatment_samples,
-                    item.control_samples,
-                    item.method,
-                    item.window_size]}
-        .collectFile(name: 'diffreps_output.csv', sort: true){
-            item -> item.join(",")+'\n'
-        }
-
-    // group_specific_ch = DIFFREPS.out.diffreps_track
-    //     .map{it->[it[0],it[1],it[2],it[3],it[4].getName()]}
-    //     .collectFile{item -> item.join(",")+'\n'}
-    //     .combine(diffreps_tmp_file)
-
-    create_sample_specific_tracks(sid_specific_ch)
-    // create_diffreps_tracks(group_specific_ch)
-    create_group_combined_tracks(combined_bigwig_ch)
-
+        sample_labels_config_ch // for proper labels
+    )
+       
     track_lines = Channel.from(default_tracks)
-        .concat(create_sample_specific_tracks.out.sid_tracks)
+        .concat(CREATE_TRACKLINES.out.comparison_specific_tracklines,
+                CREATE_TRACKLINES.out.individual_tracklines)
         .collectFile(name: 'autolimit_tracks.txt', sort: 'index'){item -> item.text}
 
     combined_bw_track_lines = Channel.from(default_tracks)
-        .concat(create_group_combined_tracks.out)
+        .concat(CREATE_TRACKLINES.out.comparison_specific_tracklines,
+                CREATE_TRACKLINES.out.group_combined_tracklines)
         .collectFile(name: 'autolimit_combined_tracks.txt', sort: 'index'){item -> item.text}
 
-    // copy bb,bam,bw files to server
-    bw_files = create_bigwig_files.out.map{it -> it[1]} 
-    narrow_files= macs2_callpeak.out.narrow_bb.map{it -> it[1]}
-    broad_files= macs2_callpeak.out.broad_bb.map{it -> it[1]}
-    broad_epic_files=epic2_callpeak.out.epic2_bb.map{it -> it[1]}
-    // bam_files=all_bams.map{it->[it[2],it[3]]}
-    // diffreps_files=DIFFREPS.out.diffreps_track.map{it->it[4]}
-    combined_bwfiles=combine_bigwig_tracks.out.map{it->it[3]} 
-
-    // track_files_to_server = bw_files.concat(bam_files, broad_epic_files, broad_files, narrow_files, diffreps_files).collect() //excluded bam track files
-    track_files_to_server = bw_files.concat(broad_epic_files, broad_files, narrow_files, combined_bwfiles).collect()
+    track_files_to_server = CREATE_BIGWIG_FILES.out.individual.map{it -> it[1]}
+        .concat(
+            epic2_callpeak.out.epic2_bb.map{it -> it[1]},
+            macs2_callpeak.out.narrow_bb.map{it -> it[1]},
+            macs2_callpeak.out.broad_bb.map{it -> it[1]},
+            CREATE_BIGWIG_FILES.out.grouped.map{it->it[3]},
+            CREATE_BYCOMPARISON_TRACKS.out.tracks.map{it->it[2]}
+        )
+        .collect()
 
     if (params.copy_to_server_bool){
         copy_files_to_server(track_files_to_server,
                              track_lines,
-                             combined_bw_track_lines,
-                             create_sample_specific_tracks.out.bigwig_hub)
+                             combined_bw_track_lines)
     }
 
 
