@@ -164,11 +164,8 @@ process collect_diffreps_norm_factors {
 workflow DIFFREPS {
     take:
     diffreps_config      //parse_configuration_xls.out.diffreps_config
-    sample_labels_config //parse_configuration_xls.out.sample_labels_config
     fragments_bed6       //bam_count.out.fragments_bed6
     norm_factors         //calc_norm_factors.out
-    peakcaller_xls       //macs2_callpeak.out.xls
-    mm9_chrom_sizes      //mm9_chrom_sizes
     fq_num_reads         //table with number of reads in R1.fq files for each sample
     mumerge_peaks              //mumerge peaks instead of MACS2 union
 
