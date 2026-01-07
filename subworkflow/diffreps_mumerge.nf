@@ -1,27 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-// process diffreps {
-//     tag "${meta.num}_${meta.method}_${meta.window}"
-    
-//     executor 'sge'
-//     cpus 16
-//     //cache false
-//     time '2h'
-//     // echo true
-
-//     beforeScript 'source $HOME/.bashrc'
-    
-//     input:
-//     tuple val(meta), path(TREATMENT_FILES), path(CONTROL_FILES), path(NORM_FILE)
-    
-//     output:
-//     tuple val(meta) , path("*_vs_*")
-
-//     shell:
-//     template 'diffreps.sh'
-// }
-
 process diffreps {
     tag "${meta.num}_${meta.method}_${meta.window_size}"
     
