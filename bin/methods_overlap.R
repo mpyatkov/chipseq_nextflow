@@ -20,8 +20,8 @@ print(argv)
 
 DEBUG <- F
 if (DEBUG) {
-  setwd("/projectnb/wax-dk/max/REFACTORING/work/79/80d932ed64be7a1cb91f4a978d01fe/")
-  argv$output_prefix <- "all_groups_together"
+  setwd("/projectnb/wax-dk/max/REFACTORING/work/8d/1a55e1e48fc51a688d276bf4443813")
+  argv$output_prefix <- "asdf"
 }
 
 diffreps_df <- list.files(pattern = "*xlsx") %>%
@@ -65,9 +65,12 @@ union_plus <- union_plus %>%
   filter(padj == min(padj), .by = c(seqnames,start,end,filename)) %>% 
   filter(abs(log2FC) == max(abs(log2FC)), .by = c(seqnames,start,end,filename)) %>% 
   distinct() %>% 
-  add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
-  ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak
-  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "DOWN_STRONG|UP_STRONG")), .by = c(seqnames,start,end)) 
+  mutate(
+    n_up_strong_overlaps = sum(str_detect(delta, "STRONG")),
+    n_up_weak_overlaps = sum(str_detect(delta, "WEAK")),
+    .by = c(seqnames, start, end)
+  ) %>% 
+  mutate(n_up_strong_and_weak_overlaps = n_up_strong_overlaps + n_up_weak_overlaps)
 
 ## union minus
 union_minus <- if (argv$output_prefix == "all_groups_together") {
@@ -84,25 +87,26 @@ union_minus <- union_minus %>%
   filter(padj == min(padj), .by = c(seqnames,start,end,filename)) %>% 
   filter(abs(log2FC) == max(abs(log2FC)), .by = c(seqnames,start,end,filename)) %>% 
   distinct() %>% 
-  add_count(seqnames,start,end, name = "n_any_quality_overlaps") %>% 
-  ## delta starts with: 1_*,4_* - signif, 2_*,3_* - weak, 0_* - low read regions
-  dplyr::mutate(n_signif_quality_overlaps = sum(str_detect(delta, "DOWN_STRONG|UP_STRONG")), .by = c(seqnames,start,end)) 
+  mutate(
+    n_down_strong_overlaps = sum(str_detect(delta, "STRONG")),
+    n_down_weak_overlaps = sum(str_detect(delta, "WEAK")),
+    .by = c(seqnames, start, end)
+  ) %>% 
+  mutate(n_down_strong_and_weak_overlaps = n_down_strong_overlaps + n_down_weak_overlaps)
+
 
 ## all together
-
-union_left <- bind_rows(union_plus, union_minus) %>% 
-  group_by(seqnames, start, end) %>%
-  filter(n_distinct(regulation) == 1) %>% ## drop mixed regulation some positive, some negative
-  ungroup() %>% 
-  ## removing duplicated rows which contains only different coordinates
-  distinct(seqnames,start,end,width,strand,regulation,n_any_quality_overlaps,
-           n_signif_quality_overlaps, filename, .keep_all = T) 
+union_left <- bind_rows(union_plus %>% select(-contains("overlaps")),
+                      union_minus %>% select(-contains("overlaps"))) %>% 
+  filter(n_distinct(regulation) == 1, .by = c(seqnames,start,end)) %>% 
+  left_join(union_plus) %>% 
+  left_join(union_minus) %>% 
+  mutate(across(contains("overlaps"), \(x)(coalesce(x,0)))) 
 
 ## wider version of detailed data.frame
 union_left_detailed <- union_left %>% 
   select(-delta) %>% 
   pivot_wider(names_from = filename, values_from = c(padj, log2FC), values_fill = NA, names_glue = "{filename}.{.value}") 
-
 
 
 ## set correct order for columns: MANORM2, DIFFREPS and RIPPM
@@ -120,14 +124,6 @@ nm <- unlist(lapply(comparisons, function(comp) {
     nm[grepl(paste0("^", comp, ".*RIPPM_1000"), nm)] %>% sort
   )
 }))
-
-# nm <- names(union_left_detailed) %>% keep(~str_detect(., "DIFFREPS|RIPPM|DESEQ2|CSAW"))
-# nm <- c(nm[grepl("DESEQ2",nm)] %>% sort,
-#         nm[grepl("CSAW",nm)] %>% sort,
-#         nm[grepl("DIFFREPS_200",nm)] %>% sort,
-#         nm[grepl("RIPPM_200",nm)] %>% sort,
-#         nm[grepl("DIFFREPS_1000",nm)] %>% sort,
-#         nm[grepl("RIPPM_1000",nm)] %>% sort)
 
 union_left_detailed <- union_left_detailed %>% 
   relocate(all_of(nm), .after = last_col())
@@ -172,15 +168,18 @@ union_left_presence <- union_left_presence %>%
 
 ## join presence(with 0/1 integers) and detailed data.frames
 union_final <- left_join(union_left_detailed, union_left_presence, join_by("seqnames","start","end","regulation")) %>% 
-  relocate(all_of(nmp), .after = n_signif_quality_overlaps)
+  relocate(all_of(nmp), .after = n_down_strong_and_weak_overlaps)
 
 
 ## add sorting columns to final table
 final <- union_final %>% 
   mutate(padj_sort = 10^-rowMeans(-log10(select(., contains("padj"))), na.rm = TRUE),
          log2fc_sort = rowMeans(select(., contains("log2FC")), na.rm = TRUE)) %>% 
-  relocate(n_signif_quality_overlaps, .after = n_any_quality_overlaps) %>% 
-  arrange(desc(n_any_quality_overlaps), desc(n_signif_quality_overlaps),padj_sort, desc(abs(log2fc_sort))) %>% 
+  relocate(c(padj_sort,log2fc_sort), .after = n_down_strong_and_weak_overlaps) %>% 
+  arrange(desc(n_up_strong_and_weak_overlaps), 
+          desc(n_down_strong_and_weak_overlaps),
+          padj_sort, 
+          desc(abs(log2fc_sort))) %>% 
   mutate(across(contains("log2FC"), ~round(.x, digits = 2))) %>% 
   distinct()
 
@@ -194,27 +193,27 @@ top_log2fc_padj <- union_left %>%
   distinct()
 
 final <- left_join(final, top_log2fc_padj, join_by(seqnames,start,end)) %>% 
-  relocate(all_of(c('Top padj','log2FC related to top padj')), .after = n_signif_quality_overlaps)
+  relocate(all_of(c('Top padj','log2FC related to top padj')), .after = n_down_strong_and_weak_overlaps)
 
 top25_up <- final %>% 
   filter(log2fc_sort > 0) %>% 
   dplyr::slice_head(n = 25) %>% 
-  select(chrom = seqnames, start, end, n_any_quality_overlaps, n_signif_quality_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
+  select(chrom = seqnames, start, end, n_up_strong_overlaps, n_up_weak_overlaps, n_up_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
 
 top25_up_noXY <- final %>% 
   filter(log2fc_sort > 0 & !str_detect(seqnames,"X|Y")) %>% 
   dplyr::slice_head(n = 25) %>% 
-  select(chrom = seqnames, start, end, n_any_quality_overlaps, n_signif_quality_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
+  select(chrom = seqnames, start, end, n_up_strong_overlaps, n_up_weak_overlaps, n_up_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
 
 top25_down <- final %>% 
   filter(log2fc_sort < 0) %>% 
   dplyr::slice_head(n = 25) %>% 
-  select(chrom = seqnames, start, end, n_any_quality_overlaps, n_signif_quality_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
+  select(chrom = seqnames, start, end, n_down_strong_overlaps, n_down_weak_overlaps, n_down_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
 
 top25_down_noXY <- final %>% 
   filter(log2fc_sort < 0 & !str_detect(seqnames,"X|Y")) %>% 
   dplyr::slice_head(n = 25) %>% 
-  select(chrom = seqnames, start, end, n_any_quality_overlaps, n_signif_quality_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
+  select(chrom = seqnames, start, end, n_down_strong_overlaps, n_down_weak_overlaps, n_down_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
 
 
 output_list <- if (argv$output_prefix == "all_groups_together") {
