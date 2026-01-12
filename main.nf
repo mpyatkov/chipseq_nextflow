@@ -177,7 +177,10 @@ process bam_count {
     cpus 4
     memory '32 GB'
     
-    beforeScript 'source $HOME/.bashrc'
+    beforeScript """
+    source $HOME/.bashrc
+    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/bam_count
+    """
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "*fragments*.bed*", overwrite: params.overwrite_outputs 
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
@@ -240,7 +243,10 @@ process macs2_callpeak {
     cpus 1
     memory '8 GB'
     
-    beforeScript 'source $HOME/.bashrc'
+    beforeScript """
+    source $HOME/.bashrc
+    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/macs2
+    """
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/macs2/", mode: "copy", pattern: "*.{narrowPeak,broadPeak,xls,bed}", overwrite: true
 
@@ -290,7 +296,10 @@ process epic2_callpeak {
     cpus 1
     memory '8 GB'
     
-    beforeScript 'source $HOME/.bashrc'
+    beforeScript """
+    source $HOME/.bashrc
+    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/epic2
+    """
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/epic2/", mode: "copy", pattern: "*bed", overwrite: true
 
@@ -356,13 +365,13 @@ process collect_metrics {
     tag "${sample_id}"
     cpus 1
     memory '16 GB'
-    
-    storeDir "${params.chipseq_bam_cache}/${sample_id}/metrics/"
 
     beforeScript """
     source $HOME/.bashrc
     mkdir -p ${params.chipseq_bam_cache}/${sample_id}/metrics
     """
+    
+    storeDir "${params.chipseq_bam_cache}/${sample_id}/metrics/"
     
     input:
     tuple val(sample_id), val(library), path(bam), path(bai)
@@ -402,13 +411,15 @@ process fastqc {
     memory '32 GB'
     errorStrategy 'retry'
     maxRetries 3
-    
-    // publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "symlink", overwrite: params.overwrite_outputs 
-    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "symlink", overwrite: params.overwrite_outputs 
-    storeDir "${params.chipseq_bam_cache}/${sample_id}/fastqc/"
 
-    
-    beforeScript 'source $HOME/.bashrc'
+    beforeScript """
+    source $HOME/.bashrc
+    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/fastqc
+    """
+
+    publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "symlink", overwrite: params.overwrite_outputs 
+
+    storeDir "${params.chipseq_bam_cache}/${sample_id}/fastqc/"
     
     input:
     tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
