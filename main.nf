@@ -359,7 +359,10 @@ process collect_metrics {
     
     storeDir "${params.chipseq_bam_cache}/${sample_id}/metrics/"
 
-    beforeScript 'source $HOME/.bashrc'
+    beforeScript """
+    source $HOME/.bashrc
+    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/metrics
+    """
     
     input:
     tuple val(sample_id), val(library), path(bam), path(bai)

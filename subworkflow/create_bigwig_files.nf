@@ -46,7 +46,10 @@ process create_bigwig_files {
     time '1h'
     memory '16 GB'
 
-    beforeScript 'source $HOME/.bashrc'
+    beforeScript """
+    source $HOME/.bashrc
+    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/bigwig
+    """
 
     storeDir "${params.chipseq_bam_cache}/${sample_id}/bigwig/"
     
