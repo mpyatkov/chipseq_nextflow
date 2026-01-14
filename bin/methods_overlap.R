@@ -197,24 +197,27 @@ final <- left_join(final, top_log2fc_padj, join_by(seqnames,start,end)) %>%
 
 top25_up <- final %>% 
   filter(log2fc_sort > 0) %>% 
+  arrange(desc(n_up_strong_overlaps),padj_sort) %>% 
   dplyr::slice_head(n = 25) %>% 
   select(chrom = seqnames, start, end, n_up_strong_overlaps, n_up_weak_overlaps, n_up_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
 
 top25_up_noXY <- final %>% 
   filter(log2fc_sort > 0 & !str_detect(seqnames,"X|Y")) %>% 
+  arrange(desc(n_up_strong_overlaps),padj_sort) %>% 
   dplyr::slice_head(n = 25) %>% 
-  select(chrom = seqnames, start, end, n_up_strong_overlaps, n_up_weak_overlaps, n_up_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
+  select(chrom = seqnames, start, end, n_up_strong_overlaps, n_up_weak_overlaps, n_up_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort)
 
 top25_down <- final %>% 
   filter(log2fc_sort < 0) %>% 
+  arrange(desc(n_down_strong_overlaps),padj_sort) %>% 
   dplyr::slice_head(n = 25) %>% 
-  select(chrom = seqnames, start, end, n_down_strong_overlaps, n_down_weak_overlaps, n_down_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
+  select(chrom = seqnames, start, end, n_down_strong_overlaps, n_down_weak_overlaps, n_down_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort)
 
 top25_down_noXY <- final %>% 
   filter(log2fc_sort < 0 & !str_detect(seqnames,"X|Y")) %>% 
+  arrange(desc(n_down_strong_overlaps),padj_sort) %>% 
   dplyr::slice_head(n = 25) %>% 
   select(chrom = seqnames, start, end, n_down_strong_overlaps, n_down_weak_overlaps, n_down_strong_and_weak_overlaps, average_padj = padj_sort, average_log2FC = log2fc_sort) 
-
 
 output_list <- if (argv$output_prefix == "all_groups_together") {
   tmp <- list()
