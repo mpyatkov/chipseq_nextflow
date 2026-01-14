@@ -22,7 +22,17 @@ RVERSION=$3
 
 module load "R/${RVERSION}"
 
-Rscript ./download_ucsc_pdf.R --session "${SESSION}" --input_file ${TOP25FILE}
+DB="${UCSC_DB:-mm9}"
+ZOOM="${UCSC_ZOOM:-3}"
+
+Rscript ./download_ucsc_pdf.R \
+  --session "${SESSION}" \
+  --user "${UCSC_LOGIN}" \
+  --password "${UCSC_PASSWORD}" \
+  --db "${DB}" \
+  --zoom "${ZOOM}" \
+  --input_file "${TOP25FILE}"
+
 
 End_Time=$(date +"%s")
 diff=$(($End_Time-$Start_Time))

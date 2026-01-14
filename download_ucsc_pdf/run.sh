@@ -40,6 +40,22 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
+# Prompt for UCSC credentials (one set for all jobs)
+read -p "UCSC login: " UCSC_LOGIN
+read -s -p "UCSC password: " UCSC_PASSWORD
+echo
+if [ -z "${UCSC_LOGIN}" ] || [ -z "${UCSC_PASSWORD}" ]; then
+    echo "Error: UCSC login and password are required."
+    exit 1
+fi
+
+# Defaults for DB and zoom (override by exporting UCSC_DB/UCSC_ZOOM before running)
+UCSC_DB="${UCSC_DB:-mm9}"
+UCSC_ZOOM="${UCSC_ZOOM:-3}"
+
+# Export for qsub -V (do NOT echo credentials)
+export UCSC_LOGIN UCSC_PASSWORD UCSC_DB UCSC_ZOOM
+
 ## Take the R version from pipelines run.sh script
 ## I supposed that you already started pipeline and pipeline have already installed
 ## all the required packages
@@ -52,9 +68,9 @@ TOP25DIR_PATH="../${TOP25DIR}"
 module load "R/${RVERSION}"
 
 for session in "$@"; do
-    for top25file in $(find ${TOP25DIR_PATH} -name "*top25*.xlsx"); do
+    for top25file in $(find ${TOP25DIR_PATH} -name "*TOP25*.xlsx" | grep by_comparison | grep NOXY); do
         fname=$(basename $top25file)
-        qsub -j y -o "${fname}.log" -N "UCSC_${fname}" download.qsub ${session} ${top25file} ${RVERSION}
+        qsub -V -j y -o "${fname}.log" -N "UCSC_${fname}" download.qsub "${session}" "${top25file}" "${RVERSION}"
     done
     echo "Starting jobs for session: ${session}..."
     echo "Please wait until all downloads are complete..."
