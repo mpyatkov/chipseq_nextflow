@@ -28,7 +28,7 @@ if(DEBUG){
 combined_tracks <- read_csv(argv$combined_tracks, col_names = F) %>% 
   select(group_name = 1, samples_str = 2, color = 3, filename = 4) %>%
   mutate(samples_str = str_replace_all(samples_str,'__',', '), 
-         color  = color %>% str_replace_all('\\"',"") %>% str_replace_all("__",","),
+         color  = color %>% str_replace_all('\\"',"") %>% str_replace_all("__",",") |> str_replace("null", "0,0,0"),
          description = str_glue("Combined {group_name} ({samples_str})")) %>% 
   arrange(group_name) 
 
