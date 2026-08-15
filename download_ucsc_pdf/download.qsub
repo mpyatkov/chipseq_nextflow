@@ -17,21 +17,20 @@ echo "=========================================================="
 
 set -eu
 SESSION=$1
-TOP25FILE=$2
-RVERSION=$3
-
-module load "R/${RVERSION}"
+TOP25INPUT=$2
+TOP25OUTPUT=$3
 
 DB="${UCSC_DB:-mm9}"
 ZOOM="${UCSC_ZOOM:-3}"
+CHROMEPATH=/projectnb/wax-es/routines/chrome-linux/chrome
 
-Rscript ./download_ucsc_pdf.R \
-  --session "${SESSION}" \
-  --user "${UCSC_LOGIN}" \
-  --password "${UCSC_PASSWORD}" \
-  --db "${DB}" \
-  --zoom "${ZOOM}" \
-  --input_file "${TOP25FILE}"
+./ucscpdf run\
+           --db "${DB}" \
+           --zoom "${ZOOM}" \
+           --session "${SESSION}" \
+           --input "${TOP25INPUT}" \
+           --output "${TOP25OUTPUT}" \
+           --chrome-path "${CHROMEPATH}"
 
 
 End_Time=$(date +"%s")

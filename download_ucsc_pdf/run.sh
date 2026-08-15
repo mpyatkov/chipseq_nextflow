@@ -56,21 +56,17 @@ UCSC_ZOOM="${UCSC_ZOOM:-3}"
 # Export for qsub -V (do NOT echo credentials)
 export UCSC_LOGIN UCSC_PASSWORD UCSC_DB UCSC_ZOOM
 
-## Take the R version from pipelines run.sh script
-## I supposed that you already started pipeline and pipeline have already installed
-## all the required packages
-RVERSION=$(cat ../run.sh | grep RVERSION= | cut -d "=" -f2)
-
 ## Check only the last RESULTS directory if we have multiple of them
 TOP25DIR=$(ls -t ../ | grep RESULTS | head -1)
 TOP25DIR_PATH="../${TOP25DIR}"
 
-module load "R/${RVERSION}"
-
 for session in "$@"; do
     for top25file in $(find ${TOP25DIR_PATH} -name "*TOP25*.xlsx" | grep by_comparison | grep NOXY); do
         fname=$(basename $top25file)
-        qsub -V -j y -o "${fname}.log" -N "UCSC_${fname}" download.qsub "${session}" "${top25file}" "${RVERSION}"
+        fname_noext=${fname%.*}
+        top25pdf="${session}__${fname_noext}_ucsc.pdf"
+        
+        qsub -V -j y -o "${fname}.log" -N "UCSC_${fname}" download.qsub "${session}" "${top25file}" "${top25pdf}"
     done
     echo "Starting jobs for session: ${session}..."
     echo "Please wait until all downloads are complete..."
