@@ -59,10 +59,10 @@ get_table <- function(path_to_file, sheet_number, marker, shift, num_cols,row_li
 
 #### MAIN
 ### config processing
-fastq <- get_table(argv$input_xlsx, sheet_number = 1, marker = "sample_id", shift = 0, num_cols = 5,row_limit = 100)
-sample_labels <- get_table(argv$input_xlsx, sheet_number = 2, marker = "sample_id", shift = 0, num_cols = 3,row_limit = 100)
-diffreps <- get_table(argv$input_xlsx, sheet_number = 2, marker = "exp_num", shift = 0, num_cols = 3,row_limit = 100)
-groups <- get_table(argv$input_xlsx, sheet_number = 2, marker = "group_description", shift = -1, num_cols = 3,row_limit = 100)
+fastq <- get_table(argv$input_xlsx, sheet_number = 1, marker = "sample_id", shift = 0, num_cols = 5,row_limit = 200)
+sample_labels <- get_table(argv$input_xlsx, sheet_number = 2, marker = "sample_id", shift = 0, num_cols = 3,row_limit = 200)
+diffreps <- get_table(argv$input_xlsx, sheet_number = 2, marker = "exp_num", shift = 0, num_cols = 3,row_limit = 200)
+groups <- get_table(argv$input_xlsx, sheet_number = 2, marker = "group_description", shift = -1, num_cols = 3,row_limit = 200)
 
 ### for each "auto" in groups config we need to assign specific color
 all_colors<-rep(c("20,150,88","204,77,0","0,127,204","66,162,66","194,86,2","40,150,160","255,86,0","0,153,153","130,130,210","80,80,160","204,0,204"),3)
