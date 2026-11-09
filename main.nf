@@ -24,6 +24,7 @@ methods = Channel.from(["DESEQ2"],
 mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: true)
 mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", checkIfExists: true)
 default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
+sex_marker_genes  = file("$projectDir/assets/sex_marker_genes.saf", checkIfExists: true)
 
 params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
 params.chipseq_bam_cache="/projectnb/wax-es/CHIPSEQ_BAM_CACHE"
@@ -46,6 +47,7 @@ include {CREATE_BYCOMPARISON_TRACKS} from './subworkflow/create_bycomparison_tra
 include {RIPPM_NORM_FACTORS} from './subworkflow/rippm_norm_factors.nf'
 include {CREATE_BIGWIG_FILES} from './subworkflow/create_bigwig_files.nf'
 include {CREATE_TRACKLINES} from './subworkflow/create_tracklines.nf'
+include {SEX_CHECK} from './subworkflow/sex_check.nf'
 
 process trim_adapters {
     tag "${sample_id}"
@@ -819,6 +821,13 @@ workflow {
         bam_count.out.fragments,
         sample_labels_config_ch,
         mm9_chrom_sizes
+    )
+
+    SEX_CHECK(
+        all_bams,
+        sample_labels_config_ch,
+        sex_marker_genes,
+        RIPPM_NORM_FACTORS.out.norm_factors
     )
 
     CREATE_BYCOMPARISON_TRACKS(
