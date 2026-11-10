@@ -21,14 +21,34 @@ methods = Channel.from(["DESEQ2"],
 
 //<<< PARAMETERS TO CHANGE
 
-mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: true)
-mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", checkIfExists: true)
-default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
-sex_marker_genes  = file("$projectDir/assets/sex_marker_genes.saf", checkIfExists: true)
+// mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: true)
+// mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", checkIfExists: true)
+// default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
+// sex_marker_genes  = file("$projectDir/assets/sex_marker_genes.saf", checkIfExists: true)
 
-params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
-params.chipseq_bam_cache="/projectnb/wax-es/CHIPSEQ_BAM_CACHE"
+// params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
+// params.chipseq_bam_cache="/projectnb/wax-es/CHIPSEQ_BAM_CACHE"
 params.dataset_label="TEST1" // default dataset label if not provided
+
+params.genome = "mm10"
+if (!params.genomes.containsKey(params.genome)) {
+    error "Unknown genome '${params.genome}'. Available: ${params.genomes.keySet().join(', ')}"
+}
+
+def g = params.genomes[params.genome]
+
+chrom_sizes          = file(g.chrom_sizes,          checkIfExists: true)
+blacklist_complement = file(g.blacklist_complement, checkIfExists: true)
+default_tracks       = file(g.default_tracks,       checkIfExists: true)
+sex_marker_genes     = file(g.sex_marker_genes,     checkIfExists: true)
+
+params.bowtie2_index     = g.bowtie2_index
+params.chipseq_bam_cache = g.bam_cache
+params.diffreps_gname    = g.diffreps_gname
+params.ucsc_db           = g.ucsc_db
+
+log.info "Genome: ${params.genome} | index: ${params.bowtie2_index} | cache: ${params.chipseq_bam_cache}"
+
 params.rversion="4.2"
 params.output_dir="./RESULTS_${params.dataset_label}"
 params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
