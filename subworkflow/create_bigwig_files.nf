@@ -3,7 +3,7 @@ workflow CREATE_BIGWIG_FILES {
     norm_factors
     fragments
     labels
-    mm9_chrom_sizes
+    chrom_sizes
     
     main:
 
@@ -14,7 +14,7 @@ workflow CREATE_BIGWIG_FILES {
     sid_fr_norm = fragments
         .join(sid_normfact_ch)
 
-    create_bigwig_files(sid_fr_norm, mm9_chrom_sizes)
+    create_bigwig_files(sid_fr_norm, chrom_sizes)
 
 
     // Combine VigWig files from one group into one track
@@ -30,7 +30,7 @@ workflow CREATE_BIGWIG_FILES {
             return [group_name, new_sids, colors[1], paths]
         } 
 
-    combine_bigwig_tracks(bigwig_group_ch, mm9_chrom_sizes)
+    combine_bigwig_tracks(bigwig_group_ch, chrom_sizes)
 
     emit:
     individual = create_bigwig_files.out
@@ -55,7 +55,7 @@ process create_bigwig_files {
     
     input:
     tuple val(sample_id), path(fragments), val(norm_factor)
-    path(mm9_chrom_sizes)
+    path(chrom_sizes)
     
     output:
     tuple val(sample_id), path("*.bw")
@@ -66,10 +66,10 @@ process create_bigwig_files {
     module load ucscutils
 
     bedtools sort -i ${fragments} > tmp.sorted.bed
-    bedtools genomecov -bg -i tmp.sorted.bed -g ${mm9_chrom_sizes} > tmp.bedGraph
+    bedtools genomecov -bg -i tmp.sorted.bed -g ${chrom_sizes} > tmp.bedGraph
     sed -i '/track/d;/random/d;/chrM/d' tmp.bedGraph
     awk -v OFS='\t' -v norm_factor="${norm_factor}" '{print \$1, \$2, \$3, \$4 * norm_factor}' "tmp.bedGraph" > "tmp.norm.bedGraph"
-    bedGraphToBigWig "tmp.norm.bedGraph" ${mm9_chrom_sizes} "${sample_id}_RiPPM_norm.bw"
+    bedGraphToBigWig "tmp.norm.bedGraph" ${chrom_sizes} "${sample_id}_RiPPM_norm.bw"
     """
 }
 
@@ -86,7 +86,7 @@ process combine_bigwig_tracks {
 
     input:
     tuple val(group_name), val(samples_string), val(color), path(sample_paths)
-    path(mm9_chrom_sizes)
+    path(chrom_sizes)
     
     output:
     tuple val(group_name), val(samples_string), val(color), path("${group_name}.bw")

@@ -75,13 +75,13 @@ process diffreps {
     if [ "\${num_ctrl_reps}" == "1" ] || [ "\${num_treatment_reps}" == "1" ]; then
     (set -x; time diffReps.pl --treatment \${treatment_reps} \
         --control \${ctrl_reps} --report ${meta.report_name} \
-        --gname mm9 --window ${meta.window_size} --nsd broad\
+        --gname ${params.diffreps_gname} --window ${meta.window_size} --nsd broad\
         --frag \${frag_size} --nproc $task.cpus --meth gt \${norm_line})
     else
 
     (set -x; time diffReps.pl --treatment \${treatment_reps} \
         --control \${ctrl_reps} --report ${meta.report_name} \
-        --gname mm9 --window ${meta.window_size} --nsd broad\
+        --gname ${params.diffreps_gname} --window ${meta.window_size} --nsd broad\
         --frag \${frag_size} --nproc $task.cpus \${norm_line})
     fi
     

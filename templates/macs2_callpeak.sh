@@ -7,7 +7,7 @@ sample_id="!{sample_id}"
 lib="!{lib}"
 bam="!{bam}"
 model="!{model}"
-mm9_chrom_sizes="!{mm9_chrom_sizes}"
+chrom_sizes="!{chrom_sizes}"
 
 # By default MACS2 uses model to find 'shift' and 'extsize 'parameters
 # if model are using then MACS2 automatically calculate 'shift' and 'extsize' params:
@@ -47,13 +47,13 @@ sed -i -E 's/-log10\(/minus_log10_/g;s/value\)/value/g' *.xls
 # ignore chrM,random and header
 cat "${sample_id}_narrow_MACS2_peaks.narrowPeak.bed" | grep -vE "track|chrM|random" >tmp.bed
 bedtools sort -i tmp.bed >tmp.sorted.bed
-bedToBigBed -allow1bpOverlap tmp.sorted.bed ${mm9_chrom_sizes} "${sample_id}_narrow_MACS2.bb"
+bedToBigBed -allow1bpOverlap tmp.sorted.bed ${chrom_sizes} "${sample_id}_narrow_MACS2.bb"
 
 rm tmp*
 
 # ignore chrM,random and header
 cat "${sample_id}_broad_MACS2_peaks.broadPeak.bed" | grep -vE "track|chrM|random" >tmp.bed
 bedtools sort -i tmp.bed >tmp.sorted.bed
-bedToBigBed -allow1bpOverlap tmp.sorted.bed ${mm9_chrom_sizes} "${sample_id}_broad_MACS2.bb"
+bedToBigBed -allow1bpOverlap tmp.sorted.bed ${chrom_sizes} "${sample_id}_broad_MACS2.bb"
 
 rm tmp*

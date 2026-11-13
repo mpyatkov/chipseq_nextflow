@@ -1,0 +1,48 @@
+## mm10 assets for the ChIP-seq pipeline (selected with params.genome = "mm10")
+##
+## Files:
+##   mm10.chrom.sizes           canonical chromosomes only (chr1-19, chrX, chrY, chrM)
+##   mm10-blacklist_complement  genome minus ENCODE mm10 blacklist v2; used by
+##                              `samtools view -L` right after alignment, so blacklist
+##                              regions and non-canonical contigs (chrUn_*, *_random)
+##                              are removed from the BAM at the first step
+##   sex_marker_genes.saf       sex-check marker windows (featureCounts SAF, 1-based),
+##                              lifted over from ../mm9/sex_marker_genes.saf
+##   default_tracks.txt         UCSC track lines added to every track set (mm10 .bb files)
+##
+## Tools: wget, bedtools, liftOver, bedToBigBed (UCSC kent utils)
+
+## 1. chromosome sizes (canonical chromosomes only, 22 lines)
+wget https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.chrom.sizes -O mm10.chrom.sizes.full
+grep -P '^chr([0-9]+|X|Y|M)\t' mm10.chrom.sizes.full > mm10.chrom.sizes
+
+## 2. complement regions to mm10-blacklist (ENCODE blacklist v2, Boyle lab)
+wget https://github.com/Boyle-Lab/Blacklist/raw/master/lists/mm10-blacklist.v2.bed.gz
+zcat mm10-blacklist.v2.bed.gz | cut -f1-3 | sort -k1,1 -k2,2n > mm10-blacklist.sorted.bed
+sort -k1,1 mm10.chrom.sizes > mm10.chrom.sizes.sorted
+bedtools complement -i mm10-blacklist.sorted.bed -g mm10.chrom.sizes.sorted > mm10-blacklist_complement
+
+## 3. sex marker genes: liftOver mm9 -> mm10
+##    SAF is 1-based, BED is 0-based: convert, lift, convert back
+wget https://hgdownload.soe.ucsc.edu/goldenPath/mm9/liftOver/mm9ToMm10.over.chain.gz
+awk 'NR>1{OFS="\t"; print $2,$3-1,$4,$1,0,$5}' ../mm9/sex_marker_genes.saf > markers_mm9.bed
+liftOver markers_mm9.bed mm9ToMm10.over.chain.gz markers_mm10.bed unmapped.bed
+## unmapped.bed must be empty
+( printf "GeneID\tChr\tStart\tEnd\tStrand\n"
+  awk 'OFS="\t"{print $4,$1,$2+1,$3,$6}' markers_mm10.bed ) > sex_marker_genes.saf
+## NOTE: windows (4 kb) are placed at the leftmost gene coordinate, as in the
+##       original mm9 file; for minus-strand genes (Xist, Uty, Ddx3y) this is
+##       the 3' end, not the TSS
+
+## 4. default tracks: mm9 .bb files (TADs, F/M chromatin maps) converted to mm10
+##    bigBedToBed X.bb X.mm9.bed
+##    liftOver X.mm9.bed mm9ToMm10.over.chain.gz X.mm10.bed X.unmapped.bed
+##    sort -k1,1 -k2,2n X.mm10.bed > X.mm10.sorted.bed
+##    bedToBigBed X.mm10.sorted.bed mm10.chrom.sizes X.mm10.bb
+##    blacklist: bedToBigBed of mm10-blacklist.sorted.bed
+##    uploaded to waxmanlabvm.bu.edu/mpyatkov/default_tracks/rnaseq_mm10/
+
+## cleanup of intermediate files
+rm -f mm10.chrom.sizes.full mm10.chrom.sizes.sorted mm10-blacklist.v2.bed.gz \
+      mm10-blacklist.sorted.bed mm9ToMm10.over.chain.gz markers_mm9.bed \
+      markers_mm10.bed unmapped.bed

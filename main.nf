@@ -21,13 +21,6 @@ methods = Channel.from(["DESEQ2"],
 
 //<<< PARAMETERS TO CHANGE
 
-// mm9_chrom_sizes  = file("$projectDir/assets/mm9.chrom.sizes", checkIfExists: true)
-// mm9_black_complement  = file("$projectDir/assets/mm9-blacklist_complement", checkIfExists: true)
-// default_tracks  = file("$projectDir/assets/default_tracks.txt", checkIfExists: true)
-// sex_marker_genes  = file("$projectDir/assets/sex_marker_genes.saf", checkIfExists: true)
-
-// params.bowtie2_index="/projectnb/wax-es/aramp10/Bowtie2/Bowtie2Index/genome"
-// params.chipseq_bam_cache="/projectnb/wax-es/CHIPSEQ_BAM_CACHE"
 params.dataset_label="TEST1" // default dataset label if not provided
 
 params.genome = "mm10"
@@ -279,7 +272,7 @@ process macs2_callpeak {
 
     input:
     tuple val(sample_id), val(library), path(bam), path(bai)
-    path(mm9_chrom_sizes)
+    path(chrom_sizes)
     
     output:
     tuple val(sample_id), path("*.{narrowPeak,broadPeak}"), emit: peak
@@ -332,7 +325,7 @@ process epic2_callpeak {
 
     input:
     tuple val(sample_id), path(fragments)
-    path(mm9_chrom_sizes)
+    path(chrom_sizes)
     
     output:
     tuple val(sample_id), path("${sample_id}_epic_bed6.bed"), emit: bed6
@@ -350,7 +343,7 @@ process epic2_callpeak {
     """
     module load epic2
     module load bedtools
-    epic2 --output "${sample_id}_epic_bed6.bed" -egf ${effective_genome_fraction} -cs ${mm9_chrom_sizes} -t ${fragments} -e ${e_value} -fs ${fragment_size} -bin ${window_size} -g 6
+    epic2 --output "${sample_id}_epic_bed6.bed" -egf ${effective_genome_fraction} -cs ${chrom_sizes} -t ${fragments} -e ${e_value} -fs ${fragment_size} -bin ${window_size} -g 6
     
     ## removing header
     sed -i '1d' "${sample_id}_epic_bed6.bed" 
@@ -361,8 +354,8 @@ process epic2_callpeak {
     ## filtering out junk and creating bigbed track
     cat "${sample_id}_epic_bed3.bed" | grep -vE "track|chrM|random" > tmp.bed
     bedtools sort -i tmp.bed > tmp.sorted.bed
-    bedClip tmp.sorted.bed ${mm9_chrom_sizes} tmp.sorted.clipped.bed
-    bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${sample_id}_epic2.bb"
+    bedClip tmp.sorted.bed ${chrom_sizes} tmp.sorted.clipped.bed
+    bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${chrom_sizes} "${sample_id}_epic2.bb"
     """
 }
 
@@ -730,7 +723,7 @@ workflow {
         .map{it -> it[1]}
         .collectFile(name: "numreads.csv", keepHeader: true)
 
-    bowtie2_align(fastq_for_mapping, mm9_black_complement)
+    bowtie2_align(fastq_for_mapping, blacklist_complement)
     
     // Combine newly generated BAMs with cached BAMs
     cached_bams_ch = bam_cache_status.cached
@@ -753,8 +746,8 @@ workflow {
     
     bam_count(all_bams)
     
-    macs2_callpeak(all_bams, mm9_chrom_sizes)
-    epic2_callpeak(bam_count.out.fragments_bed6, mm9_chrom_sizes)
+    macs2_callpeak(all_bams, chrom_sizes)
+    epic2_callpeak(bam_count.out.fragments_bed6, chrom_sizes)
 
     //picard
     collect_metrics(all_bams)
@@ -840,7 +833,7 @@ workflow {
         RIPPM_NORM_FACTORS.out.norm_factors,
         bam_count.out.fragments,
         sample_labels_config_ch,
-        mm9_chrom_sizes
+        chrom_sizes
     )
 
     SEX_CHECK(
@@ -853,7 +846,7 @@ workflow {
     CREATE_BYCOMPARISON_TRACKS(
         combined_diffpeak_reports_ch,
         MUMERGE.out.mumerge_peaks,
-        mm9_chrom_sizes)
+        chrom_sizes)
     
     // CREATE_BYCOMPARISON_TRACKS.out.tracks | view
     //     .mix(MUMERGE.out.mumerge_peaks)
