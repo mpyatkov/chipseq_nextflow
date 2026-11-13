@@ -5,7 +5,7 @@ import random
 
 debug_path = "/projectnb/wax-dk/max/G223_H3K27ac/bin/bigwig_for_hub.csv"
 
-def header(hub_name):
+def header(hub_name, genome):
     s =f"""
 hub {hub_name} hub
 shortLabel {hub_name}
@@ -13,7 +13,7 @@ longLabel {hub_name}
 useOneFile on
 email mpyatkov@bu.edu
 
-genome mm9
+genome {genome}
 
 track {hub_name}
 type bigWig
@@ -44,11 +44,11 @@ def render_track(hub_name, dpath, short_name, long_name, color):
 if __name__ == "__main__":
     hub_name = sys.argv[1]   
     track_file = sys.argv[2]
-
+    genome = sys.argv[3]
     # hub_name="TEST_HUB1"
     # track_file= "/projectnb/wax-dk/max/G223_H3K27ac/bin/bigwig_for_hub.csv"
     with open(track_file, "r") as f:
-        hdr = header(hub_name)
+        hdr = header(hub_name, genome)
         result = [hdr]
         track_lines = list(map(lambda x: x.strip(),f.readlines()))
         for track_line in track_lines:

@@ -333,7 +333,6 @@ process epic2_callpeak {
     tuple val(sample_id), path("*epic2*.bb"), emit: epic2_bb
 
     script:
-    //species=mm9
     window_size=400
     fragment_size=200
     effective_genome_fraction=0.80

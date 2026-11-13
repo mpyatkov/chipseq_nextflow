@@ -8,6 +8,7 @@ ParseArguments <- function() {
   p <- add_argument(p, '--output_name', default = "sid_tracks.txt", help = "Output name with sample specific tracks")
   p <- add_argument(p, '--data_path', default = "buuser/TEST1", help = "Directory on the waxmanserver where your data will be available")
   p <- add_argument(p, '--peakcaller', default = "MACS2", help = "Peakcaller MACS2/ SICER/EPIC2")
+  p <- add_argument(p, '--ucsc_db', default = "mm10", help = "UCSC assembly")
   return(parse_args(p))
 }
 
@@ -68,12 +69,12 @@ get_track_line <- function(t){
   track <- if (t$track_type == "bw") {
     extra <- str_glue("autoScale={t$autoscale} viewLimits=0.0:100.0 yLineOnOff=off windowingFunction=mean smoothingWindow=3 maxHeightPixels=100:64:8")
     str_glue("track type={t$track_ucsc_type} name={t$sample_id}{t$track_suffix} description={t$sample_description}{t$track_suffix} ",
-             "db=mm9 visibility={t$visibility} color={t$color} ",
+             "db={argv$ucsc_db} visibility={t$visibility} color={t$color} ",
              "{extra} ",
              "bigDataUrl={track_path}")
   } else {
     str_glue("track type={t$track_ucsc_type} name={t$sample_id}{t$track_suffix} description={t$sample_description}{t$track_suffix} ",
-             "db=mm9 visibility={t$visibility} color={t$color} ",
+             "db={argv$ucsc_db} visibility={t$visibility} color={t$color} ",
              "bigDataUrl={track_path}")
   }
   

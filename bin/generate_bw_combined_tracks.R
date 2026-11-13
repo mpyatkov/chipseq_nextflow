@@ -6,6 +6,7 @@ ParseArguments <- function() {
   p <- add_argument(p, '--combined_tracks', default = "", help = "CSV without header with group_name, samples string, color separated by '_' and file names information")
   p <- add_argument(p, '--output_name', default = "bw_combined_tracks.txt", help = "Output name with sample specific tracks")
   p <- add_argument(p, '--data_path', default = "buuser/TEST1", help = "Directory on the waxmanserver where your data will be available")
+  p <- add_argument(p, '--ucsc_db', default = "mm10", help = "UCSC assembly")
   return(parse_args(p))
 }
 
@@ -37,7 +38,7 @@ get_track_line <- function(t){
   track_path <- str_glue("http://waxmanlabvm.bu.edu/{argv$data_path}/{t$filename}")
   
   track <- str_glue("track type=bigWig name={t$group_name}_COMB description='{t$description}' ",
-                    "db=mm9 visibility=full color={t$color} ",
+                    "db={argv$ucsc_db} visibility=full color={t$color} ",
                     "autoScale=on viewLimits=0.0:100.0 yLineOnOff=off windowingFunction=mean smoothingWindow=3 maxHeightPixels=100:64:8 ",
                     "bigDataUrl={track_path}")
   

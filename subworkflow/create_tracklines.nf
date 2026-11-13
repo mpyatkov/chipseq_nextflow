@@ -21,8 +21,6 @@ workflow CREATE_TRACKLINES {
         .collectFile{item -> item.join(",")+'\n'} |
         group_combined_tracks
     
-    // group_combined_tracks.out | view
-
     // COMPARISON TRACKS - DIFFREPS,...
     comparison_ch
         .map{it->[it[0],it[1],it[2].getName()]}
@@ -56,33 +54,6 @@ process comparison_specific_tracks {
     """
 }
 
-process combined_track_lines {
-    executor 'local'
-    
-    input:
-    tuple path(sid_tracks), path(sample_labels)//, path(files)
-
-    output:
-    path("sid_tracks.txt"), emit: sid_tracks
-    path("all_bigwig_group_autoscale_hub.txt"), emit: bigwig_hub
-
-    script:
-    data_path="${workflow.userName}/${params.dataset_label}"
-    
-    """
-    module load R/${params.rversion}
-    generate_sid_tracks.R \
-        --sample_labels ${sample_labels} \
-        --sid_tracks ${sid_tracks} \
-        --data_path ${data_path} \
-        --output_name "sid_tracks.txt" \
-        --peakcaller ${params.peakcaller}
-
-    ## create all_bigwig_group_autoscale_hub.txt
-    convert_tohub.py ${params.dataset_label} ./bigwig_for_hub.csv
-    """
-}
-
 process group_combined_tracks {
     executor 'local'
 
@@ -100,7 +71,8 @@ process group_combined_tracks {
     generate_bw_combined_tracks.R \
         --combined_tracks ${group_tracks} \
         --data_path ${data_path} \
-        --output_name "bw_combined_tracks.txt"
+        --output_name "bw_combined_tracks.txt" \
+        --ucsc_db ${params.ucsc_db}
     """
 }
 
@@ -124,9 +96,10 @@ process sample_specific_tracks {
         --sid_tracks ${sid_tracks} \
         --data_path ${data_path} \
         --output_name "sid_tracks.txt" \
-        --peakcaller ${params.peakcaller}
+        --peakcaller ${params.peakcaller} \
+        --ucsc_db ${params.ucsc_db}
 
     ## create all_bigwig_group_autoscale_hub.txt
-    convert_tohub.py ${params.dataset_label} ./bigwig_for_hub.csv
+    convert_tohub.py ${params.dataset_label} ./bigwig_for_hub.csv ${params.ucsc_db}
     """
 }
