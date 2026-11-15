@@ -29,7 +29,7 @@ function peak_to_bed() {
 
     #  Filtering peaks: Omit chrM, random, end position is greater than start
     #  start position is greater than zero, end position is greater than zero
-    awk 'BEGIN {OFS="\t"} {if ($1~/chr/ && $1 !="chrM" && $1 !~/random/ && $3>$2 && $2>0 && $3>0) print $0 > "temp2.bed"}' temp1.bed
+    awk 'BEGIN {OFS="\t"} {if ($1~/chr/ && $1 !="chrM" && $1 !~/random/ && $1 !~/chrUn/  && $3>$2 && $2>0 && $3>0) print $0 > "temp2.bed"}' temp1.bed
 
     # echo 'Filtering peaks less than 100bp peak width from BED file'
     awk '{if($3-$2>99){print $0}}' temp2.bed >$output

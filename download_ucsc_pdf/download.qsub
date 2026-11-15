@@ -20,7 +20,7 @@ SESSION=$1
 TOP25INPUT=$2
 TOP25OUTPUT=$3
 
-DB="${UCSC_DB:-mm9}"
+DB="${UCSC_DB:-mm10}"
 ZOOM="${UCSC_ZOOM:-3}"
 CHROMEPATH=/projectnb/wax-es/routines/chrome-linux/chrome
 

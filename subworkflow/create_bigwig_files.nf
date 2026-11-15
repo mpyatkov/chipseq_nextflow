@@ -67,7 +67,7 @@ process create_bigwig_files {
 
     bedtools sort -i ${fragments} > tmp.sorted.bed
     bedtools genomecov -bg -i tmp.sorted.bed -g ${chrom_sizes} > tmp.bedGraph
-    sed -i '/track/d;/random/d;/chrM/d' tmp.bedGraph
+    sed -i '/track/d;/random/d;/chrM/d;/chrUn/d' tmp.bedGraph
     awk -v OFS='\t' -v norm_factor="${norm_factor}" '{print \$1, \$2, \$3, \$4 * norm_factor}' "tmp.bedGraph" > "tmp.norm.bedGraph"
     bedGraphToBigWig "tmp.norm.bedGraph" ${chrom_sizes} "${sample_id}_RiPPM_norm.bw"
     """
