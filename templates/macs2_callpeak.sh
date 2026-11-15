@@ -45,14 +45,14 @@ sed -i -E 's/-log10\(/minus_log10_/g;s/value\)/value/g' *.xls
 
 ## create bb tracks
 # ignore chrM,random and header
-cat "${sample_id}_narrow_MACS2_peaks.narrowPeak.bed" | grep -vE "track|chrM|random" >tmp.bed
+cat "${sample_id}_narrow_MACS2_peaks.narrowPeak.bed" | grep -vE "track|chrM|random|chrUn" >tmp.bed
 bedtools sort -i tmp.bed >tmp.sorted.bed
 bedToBigBed -allow1bpOverlap tmp.sorted.bed ${chrom_sizes} "${sample_id}_narrow_MACS2.bb"
 
 rm tmp*
 
 # ignore chrM,random and header
-cat "${sample_id}_broad_MACS2_peaks.broadPeak.bed" | grep -vE "track|chrM|random" >tmp.bed
+cat "${sample_id}_broad_MACS2_peaks.broadPeak.bed" | grep -vE "track|chrM|random|chrUn" >tmp.bed
 bedtools sort -i tmp.bed >tmp.sorted.bed
 bedToBigBed -allow1bpOverlap tmp.sorted.bed ${chrom_sizes} "${sample_id}_broad_MACS2.bb"
 

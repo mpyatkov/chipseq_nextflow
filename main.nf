@@ -351,7 +351,7 @@ process epic2_callpeak {
     awk 'OFS="\t" {print \$1,\$2,\$3}' "${sample_id}_epic_bed6.bed" > "${sample_id}_epic_bed3.bed"
 
     ## filtering out junk and creating bigbed track
-    cat "${sample_id}_epic_bed3.bed" | grep -vE "track|chrM|random" > tmp.bed
+    cat "${sample_id}_epic_bed3.bed" | grep -vE "track|chrM|random|chrUn" > tmp.bed
     bedtools sort -i tmp.bed > tmp.sorted.bed
     bedClip tmp.sorted.bed ${chrom_sizes} tmp.sorted.clipped.bed
     bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${chrom_sizes} "${sample_id}_epic2.bb"

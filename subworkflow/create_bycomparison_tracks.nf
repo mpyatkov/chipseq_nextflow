@@ -40,7 +40,7 @@ process bed2track {
     # ignore chrM,random and header
     if [[ \$(wc -l <*.bed) -ge 2 ]]; then
        for bed in `find . -name "*.bed"`; do
-           cat \${bed} | grep -vE "track|chrM|random" > tmp.bed
+           cat \${bed} | grep -vE "track|chrM|random|chrUn" > tmp.bed
            bedtools sort -i tmp.bed > tmp.sorted.bed
            bedClip tmp.sorted.bed ${chrom_sizes} tmp.sorted.clipped.bed
            bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${chrom_sizes} "${group_name}_MUMERGE_UCSC_track.bb"
@@ -80,7 +80,7 @@ process xlsx2track {
     # ignore chrM,random and header
     if [[ \$(wc -l <*.bed) -ge 2 ]]; then
        for bed in `find . -name "*_UCSC_track*.bed"`; do
-           cat \${bed} | grep -vE "track|chrM|random" > tmp.bed
+           cat \${bed} | grep -vE "track|chrM|random|chrUn" > tmp.bed
            bedtools sort -i tmp.bed > tmp.sorted.bed
            bedClip tmp.sorted.bed ${chrom_sizes} tmp.sorted.clipped.bed
            bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${chrom_sizes} "${meta.report_name}_UCSC_track.bb"
