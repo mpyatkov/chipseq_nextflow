@@ -794,7 +794,8 @@ workflow {
         bam_count.out.fragments_bed6,
         RIPPM_NORM_FACTORS.out.norm_factors,
         fq_num_reads, // table with number of reads in R1.fq files for each sample
-        MUMERGE.out.mumerge_peaks // mumerge peaks instead of MACS2 union 
+        MUMERGE.out.mumerge_peaks, // mumerge peaks instead of MACS2 union
+        chrom_sizes
     )
 
     QUALITY_PCA(

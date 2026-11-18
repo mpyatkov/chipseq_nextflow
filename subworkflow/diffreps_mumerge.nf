@@ -16,6 +16,7 @@ process diffreps {
     
     input:
     tuple val(meta), path(TREATMENT_FILES), path(CONTROL_FILES), path(NORM_FILE)
+    path(chrom_sizes)
     
     output:
     tuple val(meta) , path("*_vs_*")
@@ -75,13 +76,13 @@ process diffreps {
     if [ "\${num_ctrl_reps}" == "1" ] || [ "\${num_treatment_reps}" == "1" ]; then
     (set -x; time diffReps.pl --treatment \${treatment_reps} \
         --control \${ctrl_reps} --report ${meta.report_name} \
-        --gname ${params.diffreps_gname} --window ${meta.window_size} --nsd broad\
+        --chrlen ${chrom_sizes} --window ${meta.window_size} --nsd broad\
         --frag \${frag_size} --nproc $task.cpus --meth gt \${norm_line})
     else
 
     (set -x; time diffReps.pl --treatment \${treatment_reps} \
         --control \${ctrl_reps} --report ${meta.report_name} \
-        --gname ${params.diffreps_gname} --window ${meta.window_size} --nsd broad\
+        --chrlen ${chrom_sizes} --window ${meta.window_size} --nsd broad\
         --frag \${frag_size} --nproc $task.cpus \${norm_line})
     fi
     
@@ -111,7 +112,7 @@ process diffreps_summary {
 
     """
     module load R/${params.rversion}
-    diffreps_diffpeak_analysis.R --annotated_path ${meta.report_name}.annotated \
+    diffreps_diffpeak_analysis.R --annotated_path ${meta.report_name} \
         --min_avg_count 20 \
         --log2fc_cutoff 1 \
         --mumerge_path ${MUMERGE} \
@@ -147,6 +148,7 @@ workflow DIFFREPS {
     norm_factors         //calc_norm_factors.out
     fq_num_reads         //table with number of reads in R1.fq files for each sample
     mumerge_peaks              //mumerge peaks instead of MACS2 union
+    chrom_sizes
 
     main:
 
@@ -161,10 +163,11 @@ workflow DIFFREPS {
             return [meta, tl, cl]
         }
     
-    diffreps_params_withnorm = diffreps_params.combine(norm_factors)
-    diffreps_params_withnorm | diffreps
-
-
+    diffreps_params_withnorm = diffreps_params
+        .combine(norm_factors)
+    
+    diffreps(diffreps_params_withnorm, chrom_sizes)
+    
     prelim_ch = diffreps_params.map{it -> it[0..-3]} // exclude bed6 files
         .join(diffreps.out)
         .map{meta,diffout ->
