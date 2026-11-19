@@ -19,7 +19,7 @@ ParseArguments <- function() {
   p <- add_argument(p,'--session', help="UCSC session name")
   p <- add_argument(p,'--user', help="UCSC username")
   p <- add_argument(p,'--password', help="UCSC password")
-  p <- add_argument(p,'--db', default="mm9", help="UCSC database, e.g., mm9, mm10, hg19")
+  p <- add_argument(p,'--db', default="mm10", help="UCSC database, e.g., mm9, mm10, hg19")
   p <- add_argument(p,"--zoom", default = "3" , help = "zoom factor for each region")
   p <- add_argument(p, "--input_file", help = "input BED (no header) or XLS/XLSX (with header)")
   argv <- parse_args(p)
@@ -114,8 +114,8 @@ read_data <- function(file_path, pdfdir, zoom){
 
 init <- function(login, password, session_name, db) {
   sessionUrl <- paste0("https://genome.ucsc.edu/s/", login, "/", session_name)
-  main_url <- "https://genome.ucsc.edu/cgi-bin/hgTracks?db=mm9&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chr7%3A26664573%2D26693533&hgsid=966765435_KMLSgA0F83EB9IJZmt7zQ5uPhnOr"
-  main_url <- str_replace(main_url, "mm9", db)
+  main_url <- "https://genome.ucsc.edu/cgi-bin/hgTracks?db=mm10&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chr7%3A26664573%2D26693533&hgsid=966765435_KMLSgA0F83EB9IJZmt7zQ5uPhnOr"
+  main_url <- str_replace(main_url, "mm10", db)
   main_url <- str_extract(main_url, "(?<=^)(.+)(?<=position=)")
 
   loginUrl <- "https://genome.ucsc.edu/cgi-bin/hgLogin?hgLogin.do.displayLoginPage=1"

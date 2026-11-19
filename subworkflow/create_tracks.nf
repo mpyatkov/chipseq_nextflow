@@ -2,11 +2,11 @@ workflow CREATE_BYCOMPARISON_TRACKS {
     take:
     xlsx_reports_ch
     bed_reports_ch
-    mm9_chrom_sizes
+    chrom_sizes
     
     main:
-    xlsx2track(xlsx_reports_ch, mm9_chrom_sizes)
-    bed2track(bed_reports_ch, mm9_chrom_sizes)
+    xlsx2track(xlsx_reports_ch, chrom_sizes)
+    bed2track(bed_reports_ch, chrom_sizes)
     
     emit:
     tracks = xlsx2track.out.track
@@ -24,7 +24,7 @@ process bed2track {
 
     input:
     tuple val(group_name), path(bedfile)
-    path(mm9_chrom_sizes)
+    path(chrom_sizes)
     
     output:
     tuple val(group_name), path("*.bb"), emit: track
@@ -37,10 +37,10 @@ process bed2track {
     # ignore chrM,random and header
     if [[ \$(wc -l <*.bed) -ge 2 ]]; then
        for bed in `find . -name "*.bed"`; do
-           cat \${bed} | grep -vE "track|chrM|random" > tmp.bed
+           cat \${bed} | grep -vE "track|chrM|random|chrUn" > tmp.bed
            bedtools sort -i tmp.bed > tmp.sorted.bed
-           bedClip tmp.sorted.bed ${mm9_chrom_sizes} tmp.sorted.clipped.bed
-           bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${group_name}_MUMERGE_UCSC_track.bb"
+           bedClip tmp.sorted.bed ${chrom_sizes} tmp.sorted.clipped.bed
+           bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${chrom_sizes} "${group_name}_MUMERGE_UCSC_track.bb"
            rm tmp*.bed
        done
     fi
@@ -58,7 +58,7 @@ process xlsx2track {
 
     input:
     tuple val(meta), path(report)
-    path(mm9_chrom_sizes)
+    path(chrom_sizes)
     
     output:
     tuple val(meta.group_name), path("*.bb"), emit: track
@@ -75,10 +75,10 @@ process xlsx2track {
     # ignore chrM,random and header
     if [[ \$(wc -l <*.bed) -ge 2 ]]; then
        for bed in `find . -name "*_UCSC_track*.bed"`; do
-           cat \${bed} | grep -vE "track|chrM|random" > tmp.bed
+           cat \${bed} | grep -vE "track|chrM|random|chrUn" > tmp.bed
            bedtools sort -i tmp.bed > tmp.sorted.bed
-           bedClip tmp.sorted.bed ${mm9_chrom_sizes} tmp.sorted.clipped.bed
-           bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${mm9_chrom_sizes} "${meta.report_name}_UCSC_track.bb"
+           bedClip tmp.sorted.bed ${chrom_sizes} tmp.sorted.clipped.bed
+           bedToBigBed -allow1bpOverlap tmp.sorted.clipped.bed ${chrom_sizes} "${meta.report_name}_UCSC_track.bb"
            rm tmp*.bed
        done
     fi

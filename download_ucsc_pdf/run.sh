@@ -50,7 +50,7 @@ if [ -z "${UCSC_LOGIN}" ] || [ -z "${UCSC_PASSWORD}" ]; then
 fi
 
 # Defaults for DB and zoom (override by exporting UCSC_DB/UCSC_ZOOM before running)
-UCSC_DB="${UCSC_DB:-mm9}"
+UCSC_DB="${UCSC_DB:-mm10}"
 UCSC_ZOOM="${UCSC_ZOOM:-3}"
 
 # Export for qsub -V (do NOT echo credentials)
