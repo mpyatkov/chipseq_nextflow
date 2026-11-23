@@ -5,7 +5,7 @@ process diffreps {
     tag "${meta.num}_${meta.method}_${meta.window_size}"
     
     executor 'sge'
-    cpus 16
+    cpus 8
     //cache false
     time '2h'
     // echo true
@@ -23,12 +23,6 @@ process diffreps {
 
     script:
     """
-    set +eu
-    module load bedtools
-    module load miniconda
-    conda activate /projectnb/wax-es/routines/condaenv/perlenv
-    set -ue
-
     frag_size=0
 
     echo "${meta.method}_${meta.window_size}_${meta.report_name}"
@@ -74,13 +68,13 @@ process diffreps {
     fi
 
     if [ "\${num_ctrl_reps}" == "1" ] || [ "\${num_treatment_reps}" == "1" ]; then
-    (set -x; time diffReps.pl --treatment \${treatment_reps} \
+    (set -x; time diffreps --treatment \${treatment_reps} \
         --control \${ctrl_reps} --report ${meta.report_name} \
         --chrlen ${chrom_sizes} --window ${meta.window_size} --nsd broad\
         --frag \${frag_size} --nproc $task.cpus --meth gt \${norm_line})
     else
 
-    (set -x; time diffReps.pl --treatment \${treatment_reps} \
+    (set -x; time diffreps --treatment \${treatment_reps} \
         --control \${ctrl_reps} --report ${meta.report_name} \
         --chrlen ${chrom_sizes} --window ${meta.window_size} --nsd broad\
         --frag \${frag_size} --nproc $task.cpus \${norm_line})
