@@ -4,7 +4,7 @@ nextflow.enable.dsl=2
 process mumerge {
     tag "${group_name}"
     cpus 8
-    beforeScript 'source $HOME/.bashrc'    
+    container params.rlang_sif
     publishDir path: "${params.output_dir}/mumerge_output/", mode: "copy", pattern: "${group_name}_mumerge.bed", overwrite: true
 
     input:
@@ -15,7 +15,6 @@ process mumerge {
 
     script:
     """
-    module load R/${params.rversion}
     run_mumerge.R --files_path ./ --pattern "bed" --ncores $task.cpus --output_file "${group_name}_mumerge.bed"
     """
 }

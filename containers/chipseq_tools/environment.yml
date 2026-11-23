@@ -1,0 +1,23 @@
+# Command-line tools for the multi-tool processes of the ChIP-seq/ATAC-seq pipeline.
+# Versions are pinned; check them against the SCC modules before the first build
+# (module avail bowtie2 samtools macs2 epic2 bedtools).
+name: chipseq_tools
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bowtie2=2.5.5
+  - samtools=1.21
+  - sambamba=1.0.1
+  - bedtools=2.31.1
+  - macs2=2.2.9.1
+  - epic2=0.0.54
+  - ucsc-bedclip=482
+  - ucsc-bedtobigbed=482
+  - ucsc-bedgraphtobigwig=482
+  - gawk
+  - coreutils
+  - findutils
+  - grep
+  - sed
+  - procps-ng     # `ps`, used by Nextflow to collect task metrics

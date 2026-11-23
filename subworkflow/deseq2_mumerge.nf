@@ -37,7 +37,7 @@ process calc_deseq2 {
     // time '1h'
     executor "local"
     
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
     publishDir path: "${params.output_dir}/deseq2_output/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
         
@@ -51,7 +51,6 @@ process calc_deseq2 {
     output_prefix="${meta.group_name}_MuMerge_DESEQ2"
 
     """
-    module load R/${params.rversion}
 
     deseq2_diffpeak_analysis.R --coverage_file ${coverage} \
         --control_samples "${meta.control_samples}" \

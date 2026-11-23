@@ -7,7 +7,7 @@ process calc_csaw {
     time '4h'
     memory '16 GB'
     
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
     publishDir path: "${params.output_dir}/csaw_output/", mode: "copy", pattern: "*.xlsx", overwrite: true
         
     input:
@@ -20,7 +20,6 @@ process calc_csaw {
     output_prefix="${meta.group_name}_MuMerge_CSAW"
 
     """
-    module load R/${params.rversion}
  
     csaw_diffpeak_analysis.R --control_samples "${meta.control_samples}" \
         --treatment_samples "${meta.treatment_samples}" \

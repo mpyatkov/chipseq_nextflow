@@ -1,0 +1,52 @@
+Bootstrap: docker
+From: mambaorg/micromamba:2.3.3
+
+# Command-line tools for the ChIP-seq/ATAC-seq pipeline:
+#   bowtie2, samtools, sambamba, bedtools, macs2, epic2, UCSC bedClip/bedToBigBed/bedGraphToBigWig
+#   diffreps-rs v0.1.0 (static binary from the GitHub release, checksum verified)
+#
+# Build on SCC from this directory (environment.yml must be next to this file):
+#   singularity build --fakeroot chipseq_tools.sif chipseq_tools.def
+
+%files
+    environment.yml /opt/environment.yml
+
+%post
+    set -eu
+    micromamba install -y -n base -f /opt/environment.yml
+    micromamba clean -a -y
+
+    # diffreps-rs (Rust port of diffReps 1.55.6)
+    DIFFREPS_VERSION=0.1.0
+    DIFFREPS_SHA256=27eb3fb855cbc5f92781899f2527baf052fcf8116c995d41748d0cbb4632e09c
+    DIFFREPS_TGZ=diffreps-v${DIFFREPS_VERSION}-x86_64-unknown-linux-musl.tar.gz
+    cd /tmp
+    micromamba run -n base python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/mpyatkov/diffreps-rs/releases/download/v${DIFFREPS_VERSION}/${DIFFREPS_TGZ}', '${DIFFREPS_TGZ}')"
+    echo "${DIFFREPS_SHA256}  ${DIFFREPS_TGZ}" | sha256sum -c -
+    mkdir -p diffreps_x && tar -xzf ${DIFFREPS_TGZ} -C diffreps_x
+    install -m 0755 "$(find diffreps_x -type f -name diffreps | head -1)" /opt/conda/bin/diffreps
+    rm -rf diffreps_x ${DIFFREPS_TGZ}
+
+    micromamba env export -n base > /opt/environment.lock.yml
+
+%environment
+    export PATH=/opt/conda/bin:$PATH
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+
+%test
+    set -eu
+    export PATH=/opt/conda/bin:$PATH
+    for t in bowtie2 samtools sambamba bedtools macs2 epic2 bedClip bedToBigBed bedGraphToBigWig diffreps awk sort; do
+        command -v "$t" >/dev/null || { echo "missing: $t"; exit 1; }
+    done
+    diffreps --version
+    samtools --version | head -1
+    macs2 --version
+
+%labels
+    Author waxmanlab
+    Description "chipseq-nextflow tools: bowtie2, samtools, sambamba, bedtools, macs2, epic2, UCSC tools, diffreps-rs 0.1.0"
+
+%help
+    Exact package versions are in /opt/environment.lock.yml inside the image.

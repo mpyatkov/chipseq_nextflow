@@ -37,7 +37,7 @@ process quality_pca_correlation {
 
     executor 'local'
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
     publishDir path: "${params.output_dir}/summary/pileup_data_for_pca/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
     input:
@@ -49,7 +49,6 @@ process quality_pca_correlation {
 
     script:
     """
-    module load R/${params.rversion}
     quality_pca.R --treatment_name $tr_name \
         --control_name $ctrl_name \
         --treatment_samples '$tr_samples'\

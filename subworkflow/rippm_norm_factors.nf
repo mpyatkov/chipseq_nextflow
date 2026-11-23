@@ -32,7 +32,7 @@ process fragments_union_overlap_stats {
 process calc_norm_factors {
 
     executor "local"
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
     publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.tsv", overwrite: true
         
     input:
@@ -43,7 +43,6 @@ process calc_norm_factors {
     
     script:
     """
-    module load R/${params.rversion}
     calculate_norm_factors.R ${sample_stats} "Norm_Factors.tsv"
     """
 }

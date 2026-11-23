@@ -51,7 +51,7 @@ process bed2track {
 process xlsx2track {
     tag "${meta.num}_${meta.method}_${meta.window_size}"
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
 
     executor 'local'
     cpus 1
@@ -66,8 +66,6 @@ process xlsx2track {
     script:
     
     """
-    module load R/${params.rversion}
-    module load bedtools
     
     create_by_comparison_track.R --report_path ${report} \
         --track_name "${meta.report_name}_UCSC_track.bed"

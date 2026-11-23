@@ -35,6 +35,7 @@ workflow CREATE_TRACKLINES {
 
 process comparison_specific_tracks {
     executor 'local'
+    container params.rlang_sif
     //publishDir copy to server
     input:
     path(diffreps_tracks)
@@ -46,7 +47,6 @@ process comparison_specific_tracks {
     data_path="${workflow.userName}/${params.dataset_label}"
     
     """
-    module load R/${params.rversion}
     create_by_comparison_trackline.R \
         --diffreps_tracks ${diffreps_tracks} \
         --data_path ${data_path} \
@@ -56,6 +56,7 @@ process comparison_specific_tracks {
 
 process group_combined_tracks {
     executor 'local'
+    container params.rlang_sif
 
     input:
     path(group_tracks)
@@ -67,7 +68,6 @@ process group_combined_tracks {
     data_path="${workflow.userName}/${params.dataset_label}"
 
     """
-    module load R/${params.rversion}
     generate_bw_combined_tracks.R \
         --combined_tracks ${group_tracks} \
         --data_path ${data_path} \
@@ -78,6 +78,7 @@ process group_combined_tracks {
 
 process sample_specific_tracks {
     executor 'local'
+    container params.rlang_sif
     
     input:
     tuple path(sid_tracks), path(sample_labels)//, path(files)
@@ -90,7 +91,6 @@ process sample_specific_tracks {
     data_path="${workflow.userName}/${params.dataset_label}"
     
     """
-    module load R/${params.rversion}
     generate_sid_tracks.R \
         --sample_labels ${sample_labels} \
         --sid_tracks ${sid_tracks} \

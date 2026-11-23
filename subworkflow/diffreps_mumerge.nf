@@ -86,7 +86,7 @@ process diffreps {
 process diffreps_summary {
     tag "${meta.num}_${meta.method}_${meta.window_size}"
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
     
     executor 'local'
     // cpus 1
@@ -105,7 +105,6 @@ process diffreps_summary {
     output_prefix="${meta.group_name}_MuMerge_${meta.method}_${meta.window_size}"
 
     """
-    module load R/${params.rversion}
     diffreps_diffpeak_analysis.R --annotated_path ${meta.report_name} \
         --min_avg_count 20 \
         --log2fc_cutoff 1 \
@@ -118,6 +117,7 @@ process diffreps_summary {
 process collect_diffreps_norm_factors {
 
     executor 'local'
+    container params.rlang_sif
     publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.xlsx", overwrite: true
     // echo true
 
@@ -128,7 +128,6 @@ process collect_diffreps_norm_factors {
 
     script:
     """
-    module load R/${params.rversion}
     diffreps_output_parser.R --path "." \
         --rippm_report ${sample_stats} \
         --fastq_num_reads ${fq_num_reads}

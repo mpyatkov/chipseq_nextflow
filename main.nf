@@ -555,7 +555,7 @@ process by_comparison_overlap {
     executor 'local'
     publishDir path: "${params.output_dir}/summary/by_comparison_overlap/", mode: "copy", pattern: "*_overlap.xlsx", overwrite: true
     publishDir path: "${params.output_dir}/summary/by_comparison_overlap/${group_name}_TOP25", mode: "copy", pattern: "*TOP25*.xlsx", overwrite: true
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
     input:
     tuple val(group_name), path(diffreps_reports)
     
@@ -564,7 +564,6 @@ process by_comparison_overlap {
 
     script:
     """
-    module load R/${params.rversion}
     methods_overlap.R --output_prefix ${group_name}
     """
 }
@@ -581,7 +580,7 @@ process all_comparisons_overlap {
     publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*_overlap.xlsx", overwrite: true
     publishDir path: "${params.output_dir}/summary/all_groups_together_overlap_TOP25/", mode: "copy", pattern: "*TOP25*.xlsx", overwrite: true
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
 
     input:
     path(diffreps_reports)
@@ -591,7 +590,6 @@ process all_comparisons_overlap {
 
     script:
     """
-    module load R/${params.rversion}
     methods_overlap.R --output_prefix "all_groups_together"
     """
 }
@@ -604,9 +602,9 @@ process extradetailed_macs2_epic_peaks_overlaps {
     memory '32 GB'
     errorStrategy 'retry'
     maxRetries 3
-    
-    beforeScript 'source $HOME/.bashrc'
-    
+
+    container params.rlang_sif
+
     publishDir path: "${params.output_dir}/summary/extradetailed_macs2_epic_peaks_overlaps/", mode: "copy", pattern: "*.xlsx", overwrite: true
 
     input:
@@ -618,7 +616,6 @@ process extradetailed_macs2_epic_peaks_overlaps {
 
     script:
     """
-    module load R/${params.rversion}
     detailed_macs2_peaks_overlap.R --peak_prefix "broad" --sample_labels ./sample_labels.csv
     detailed_macs2_peaks_overlap.R --peak_prefix "narrow" --sample_labels ./sample_labels.csv
     detailed_epic2_peaks_overlap.R --peak_prefix "epic" --sample_labels ./sample_labels.csv

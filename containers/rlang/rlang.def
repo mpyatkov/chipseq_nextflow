@@ -1,0 +1,69 @@
+Bootstrap: docker
+From: bioconductor/bioconductor_docker:RELEASE_3_23-R-4.6.1
+
+# R environment for the ChIP-seq/ATAC-seq pipeline:
+#   R 4.6.1 + Bioconductor 3.23 (pinned by the base image tag)
+#   CRAN packages pinned to a dated Posit Package Manager snapshot
+#   mumerge pinned to a GitHub commit
+#   bedtools (apt) for the xlsx2track processes, which call R and bedtools
+#
+# Build on SCC (see containers/README.md):
+#   singularity build --fakeroot rlang.sif rlang.def
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Non-R tools used inside R processes.
+    #   bedtools : xlsx2track (create_tracks.nf, create_bycomparison_tracks.nf)
+    #   python3  : convert_tohub.py (sample_specific_tracks)
+    apt-get update
+    apt-get install -y --no-install-recommends bedtools python3
+    rm -rf /var/lib/apt/lists/*
+
+    # UCSC bedClip / bedToBigBed for xlsx2track (pinned UCSC release v479).
+    for t in bedClip bedToBigBed; do
+        curl -fsSL -o /usr/local/bin/$t https://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64.v479/$t
+        chmod 0755 /usr/local/bin/$t
+    done
+
+    # CRAN snapshot date: change it deliberately to update CRAN packages.
+    # Bioconductor packages come from the 3.23 binary repo of the base image.
+    cat > /tmp/install.R <<'EOF'
+options(Ncpus = 4,
+        repos = c(CRAN = "https://p3m.dev/cran/__linux__/noble/2026-11-20"))
+cran <-c("argparser", "tidyverse", "writexl", "readxl", "openxlsx",
+          "patchwork", "ggrepel", "ggpubr", "ggfortify", "formattable",
+          "future", "furrr", "vroom", "fs", "ragg", "remotes")
+bioc <- c("DESeq2", "edgeR", "csaw", "plyranges", "GenomicRanges")
+BiocManager::install(c(cran, bioc), update = FALSE, ask = FALSE)
+remotes::install_github("mpyatkov/mumerger@35c8afb236cd2be76b2c4bab05e4c5f29124d175",
+                        upgrade = "never")
+missing <- setdiff(c(cran, bioc, "mumerge"), rownames(installed.packages()))
+if (length(missing)) stop("Not installed: ", paste(missing, collapse = ", "))
+EOF
+    Rscript /tmp/install.R
+    rm -f /tmp/install.R
+
+    # Record package versions inside the image.
+    Rscript -e 'ip <- installed.packages()[, c("Package", "Version")]; write.table(ip, "/opt/r_packages.tsv", sep = "\t", quote = FALSE, row.names = FALSE)'
+
+%environment
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+    # Ignore any user library from the host (e.g. ~/R/... set in .bashrc).
+    export R_LIBS_USER=/nonexistent
+    unset R_LIBS
+
+%test
+    set -eu
+    command -v bedtools >/dev/null || { echo "bedtools missing"; exit 1; }
+    command -v python3  >/dev/null || { echo "python3 missing"; exit 1; }    Rscript -e 'for (p in c("DESeq2","edgeR","csaw","plyranges","GenomicRanges","mumerge","argparser","tidyverse","writexl","readxl","openxlsx","patchwork","ggrepel","ggpubr","ggfortify","formattable","furrr","vroom","fs")) if (!requireNamespace(p, quietly = TRUE)) stop("missing R package: ", p)'
+
+%labels
+    Author waxmanlab
+    Description "chipseq-nextflow R environment: R 4.6.1, Bioconductor 3.23, CRAN snapshot 2026-11-20, mumerge@35c8afb, bedtools"
+
+%help
+    R environment for the ChIP-seq/ATAC-seq Nextflow pipeline.
+    Package versions are listed in /opt/r_packages.tsv inside the image.

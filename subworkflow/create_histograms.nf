@@ -17,7 +17,7 @@ workflow CREATE_HISTOGRAMS {
 process create_individual_histograms {
     tag "${meta.num}_${meta.method}_${meta.window_size}"
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
 
     executor 'local'
     cpus 1
@@ -31,7 +31,6 @@ process create_individual_histograms {
     script:
     hist_name="${meta.report_name}_histogram.pdf"
     """
-    module load R/${params.rversion}
     
     create_histogram.R --report_path ${report} \
         --control_name ${meta.control_name} \

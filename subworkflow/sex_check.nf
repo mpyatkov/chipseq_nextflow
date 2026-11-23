@@ -51,7 +51,7 @@ process COUNT_SEX_MARKERS {
 process GENERATE_REPORT {
     tag "${group_name}"
     cpus 1
-    beforeScript 'source $HOME/.bashrc'
+    container params.rlang_sif
     executor 'local'
     // publishDir path: "${params.output_dir}/mumerge_output/", mode: "copy", pattern: "${group_name}_mumerge.bed", overwrite: true
     publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.xlsx", overwrite: true
@@ -66,7 +66,6 @@ process GENERATE_REPORT {
     
     script:
     """
-    module load R/${params.rversion}
     sex_check_atac.R \
         --counts $counts \
         --norm_factors $norm_factors \
