@@ -5,7 +5,9 @@ process calc_csaw {
     tag "${meta.group_name}"
     cpus 4
     time '4h'
-    memory '16 GB'
+    memory {16.GB * task.attempt}
+    errorStrategy { task.exitStatus in [137, 140] ? 'retry' : 'terminate' }
+    maxRetries 2
     
     container params.rlang_sif
     publishDir path: "${params.output_dir}/csaw_output/", mode: "copy", pattern: "*.xlsx", overwrite: true
