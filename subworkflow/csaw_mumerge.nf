@@ -5,7 +5,7 @@ process calc_csaw {
     tag "${meta.group_name}"
     cpus 4
     time '4h'
-    memory {16.GB * task.attempt}
+    memory {32.GB * task.attempt}  // 32 -> 64 -> 96 GB on retries
     errorStrategy { task.exitStatus in [137, 140] ? 'retry' : 'terminate' }
     maxRetries 2
     
@@ -27,6 +27,7 @@ process calc_csaw {
         --treatment_samples "${meta.treatment_samples}" \
         --library "${meta.library}" \
         --mumerge "${MUMERGE}" \
+        --ncores ${task.cpus} \
         --output_prefix ${output_prefix}
     """
 }

@@ -5,7 +5,8 @@ suppressPackageStartupMessages(library(argparser))
 suppressPackageStartupMessages(library(plyranges)) 
 suppressPackageStartupMessages(library(writexl)) 
 suppressPackageStartupMessages(library(readr)) 
-suppressPackageStartupMessages(library(tidyr)) 
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(BiocParallel))
 
 
 ParseArguments <- function() {
@@ -15,7 +16,8 @@ ParseArguments <- function() {
   p <- add_argument(p,'--output_prefix', default="NONE", help="name for group of comparisons")
   p <- add_argument(p,'--library', default="both", help="paired/single-end information [both, none, first, second]")
   p <- add_argument(p,'--mumerge', default="./mumerge.bed", help="mumerge file for comparison")
-  
+  p <- add_argument(p,'--ncores', default=1, help="number of cores for counting reads (BAM files are read in parallel)")
+
   return(parse_args(p))
 }
 
@@ -33,6 +35,10 @@ CONTROL_SAMPLES <- argv$control_samples
 OUTPUT_PREFIX <- argv$output_prefix
 LIBRARY <- ifelse(argv$library == "paired","both","none")
 MUMERGE <- argv$mumerge
+NCORES <- as.integer(argv$ncores)
+
+## read BAM files in parallel; the counts are identical to serial counting
+BPPARAM <- if (NCORES > 1) MulticoreParam(workers = NCORES) else SerialParam()
 
 log2FC_cutoff <- 1
   
@@ -68,14 +74,16 @@ data <- windowCounts(
   ext = 200,      # 100 Fragment extension for ATAC-seq (typically ~200bp fragments)
   width = 150,    # Window width - smaller for ATAC-seq than ChIP-seq
   spacing = 30,   # Window spacing
-  param = param
+  param = param,
+  BPPARAM = BPPARAM
 )
 
 binned <- windowCounts(
-  bam.files, 
-  bin = TRUE, 
+  bam.files,
+  bin = TRUE,
   width = 10000,    # Large bins for background estimation
-  param = param
+  param = param,
+  BPPARAM = BPPARAM
 )
 
 keep <- filterWindowsGlobal(data, binned)$filter > log2(5)
