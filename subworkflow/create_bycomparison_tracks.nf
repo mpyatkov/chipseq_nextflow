@@ -18,7 +18,7 @@ workflow CREATE_BYCOMPARISON_TRACKS {
 process bed2track {
     tag "${group_name}"
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.tools_sif
 
     executor 'local'
     cpus 1
@@ -35,7 +35,6 @@ process bed2track {
     description = "${group_name} (MUMERGE)"
     
     """
-    module load bedtools
     
     # ignore chrM,random and header
     if [[ \$(wc -l <*.bed) -ge 2 ]]; then

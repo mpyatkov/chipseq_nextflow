@@ -24,7 +24,7 @@ process total_union {
     executor "local"
     // echo true
     
-    beforeScript 'source $HOME/.bashrc'
+    container params.tools_sif
     
     input:
     path("*")
@@ -34,7 +34,6 @@ process total_union {
 
     script:
     """
-    module load bedtools
     cat * > tmp.bed
     sort -k1,1 -k2,2n tmp.bed > tmp1.bed
     bedtools merge -i tmp1.bed > peak_union.bed

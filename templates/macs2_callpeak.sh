@@ -1,7 +1,5 @@
 #!/bin/bash
 
-module load macs2
-module load bedtools
 
 sample_id="!{sample_id}"
 lib="!{lib}"

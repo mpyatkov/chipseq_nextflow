@@ -106,7 +106,7 @@ process bowtie2_align {
     
     cpus 16
     memory '32 GB'
-    beforeScript 'source $HOME/.bashrc'
+    container params.tools_sif
 
     // put to cache without overwrite
     publishDir path: "${params.chipseq_bam_cache}/${sample_id}/bam/", mode: 'copy', pattern: "${sample_id}_sorted_filtered.bam*", overwrite: false
@@ -134,8 +134,6 @@ process bowtie2_align {
     }
 
     """
-    module load bowtie2
-    module load samtools
 
     set -x
     bowtie2 -p $task.cpus -x $params.bowtie2_index $reads_args -S ${sample_id}_bowtie2.sam 2> ${sample_id}.bowtie2.log
@@ -192,10 +190,7 @@ process bam_count {
     cpus 4
     memory '32 GB'
     
-    beforeScript """
-    source $HOME/.bashrc
-    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/bam_count
-    """
+    container params.tools_sif
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "*fragments*.bed*", overwrite: params.overwrite_outputs 
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/bam/", mode: "symlink", pattern: "${sample_id}_sorted_filtered.bam*", overwrite: params.overwrite_outputs 
@@ -215,8 +210,6 @@ process bam_count {
     bedtools_bedpe = lib == "paired" ? "-bedpe" : ""
 
     """
-    module load bedtools
-    module load samtools
     
     ## extracting fragments
     ## for paired-end (start1,end1 - start2,end2) it will be difference (start1,end2)
@@ -258,17 +251,13 @@ process macs2_callpeak {
     cpus 1
     memory '8 GB'
     
-    beforeScript """
-    source $HOME/.bashrc
-    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/macs2
-    """
+    container params.tools_sif
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/macs2/", mode: "copy", pattern: "*.{narrowPeak,broadPeak,xls,bed}", overwrite: true
 
     storeDir "${params.chipseq_bam_cache}/${sample_id}/macs2/"
     
     executor 'sge'
-    beforeScript 'source $HOME/.bashrc'
 
     input:
     tuple val(sample_id), val(library), path(bam), path(bai)
@@ -311,17 +300,13 @@ process epic2_callpeak {
     cpus 1
     memory '8 GB'
     
-    beforeScript """
-    source $HOME/.bashrc
-    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/epic2
-    """
+    container params.tools_sif
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/epic2/", mode: "copy", pattern: "*bed", overwrite: true
 
     storeDir "${params.chipseq_bam_cache}/${sample_id}/epic2/"
     
     executor 'sge'
-    beforeScript 'source $HOME/.bashrc'
 
     input:
     tuple val(sample_id), path(fragments)
@@ -340,8 +325,6 @@ process epic2_callpeak {
     e_value=100
     
     """
-    module load epic2
-    module load bedtools
     epic2 --output "${sample_id}_epic_bed6.bed" -egf ${effective_genome_fraction} -cs ${chrom_sizes} -t ${fragments} -e ${e_value} -fs ${fragment_size} -bin ${window_size} -g 6
     
     ## removing header

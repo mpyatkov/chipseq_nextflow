@@ -12,7 +12,7 @@ process diffreps {
 
     // debug true
     
-    beforeScript 'source $HOME/.bashrc'
+    container params.tools_sif
     
     input:
     tuple val(meta), path(TREATMENT_FILES), path(CONTROL_FILES), path(NORM_FILE)

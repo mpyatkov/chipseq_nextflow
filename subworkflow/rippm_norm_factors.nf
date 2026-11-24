@@ -4,7 +4,7 @@ process fragments_union_overlap_stats {
     executor "sge"
     cpus 1
     memory '8 GB'
-    beforeScript 'source $HOME/.bashrc'
+    container params.tools_sif
     
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/macs2/", mode: "copy", pattern: "${sample_id}_fragments_union_coverage.bed", overwrite: true
     
@@ -17,7 +17,6 @@ process fragments_union_overlap_stats {
     
     script:
     """
-    module load bedtools
     bedtools coverage -a $union -b $fragments > "${sample_id}_fragments_union_coverage.bed"
     
     FRAGMENT_COUNT=\$(cat $fragments | wc -l)
