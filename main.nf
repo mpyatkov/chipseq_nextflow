@@ -491,6 +491,10 @@ def is_empty_file(fp) {
 process check_bam_cache {
 
     executor "local"
+    // Always look at the cache folder: with -resume a cached result would keep
+    // the answer from the first run (e.g. "not found") and send every sample
+    // to trimming and alignment again whenever those processes change.
+    cache false
     input:
     tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
     
