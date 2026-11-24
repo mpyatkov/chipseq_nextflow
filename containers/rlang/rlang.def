@@ -58,7 +58,10 @@ EOF
 %test
     set -eu
     command -v bedtools >/dev/null || { echo "bedtools missing"; exit 1; }
-    command -v python3  >/dev/null || { echo "python3 missing"; exit 1; }    Rscript -e 'for (p in c("DESeq2","edgeR","csaw","plyranges","GenomicRanges","mumerge","argparser","tidyverse","writexl","readxl","openxlsx","patchwork","ggrepel","ggpubr","ggfortify","formattable","furrr","vroom","fs")) if (!requireNamespace(p, quietly = TRUE)) stop("missing R package: ", p)'
+    command -v python3  >/dev/null || { echo "python3 missing"; exit 1; }
+    bedClip 2>&1 | grep -q "bedClip" || { echo "bedClip not runnable"; exit 1; }
+    bedToBigBed 2>&1 | grep -q "bedToBigBed" || { echo "bedToBigBed not runnable"; exit 1; }
+    Rscript -e 'for (p in c("DESeq2","edgeR","csaw","plyranges","GenomicRanges","mumerge","argparser","tidyverse","writexl","readxl","openxlsx","patchwork","ggrepel","ggpubr","ggfortify","formattable","furrr","vroom","fs")) if (!requireNamespace(p, quietly = TRUE)) stop("missing R package: ", p)'
 
 %labels
     Author waxmanlab
