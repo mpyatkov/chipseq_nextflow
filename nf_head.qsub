@@ -1,0 +1,33 @@
+#!/bin/bash -l
+# Batch job that runs Nextflow itself. Processes with `executor 'local'`
+# (R summaries, tracks, PDFs) run inside this job; the others are submitted
+# to SGE as before. Submitted by run.sh:
+#   qsub -N nf_<label> nf_head.qsub <config_dir> <dataset_label> <output_dir>
+#$ -P wax-es
+#$ -cwd
+#$ -l h_rt=72:00:00
+#$ -pe omp 4
+#$ -l mem_per_core=8G
+#$ -j y
+#$ -o nextflow_head.log
+#$ -m ea
+
+set -eu
+config_dir=$1
+dataset_label=$2
+output_dir=$3
+
+module load java/21.0.4
+module load nextflow/24.04.4
+
+stamp=$(date +%Y%m%d_%H%M%S)
+info_dir="${output_dir}/summary/pipeline_info"
+mkdir -p "${info_dir}"
+
+NXF_OPTS='-Xms500M -Xmx4G' nextflow run main.nf -ansi-log false \
+    --input_configs "${config_dir}" \
+    --dataset_label "${dataset_label}" \
+    --output_dir "${output_dir}" \
+    -with-report "${info_dir}/report_${stamp}.html" \
+    -with-trace  "${info_dir}/trace_${stamp}.tsv" \
+    -resume

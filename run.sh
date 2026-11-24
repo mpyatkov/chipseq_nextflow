@@ -1,13 +1,16 @@
 #!/bin/bash
 
 set -eu
-RVERSION=4.2
 xlsconfig=$1
 
 # G222_G207_H3K27ac
 dataset_label=${2:-$(pwd | xargs basename)}
 config_dir="raw_configs"
 output_dir="RESULTS_${dataset_label}"
+
+# R image (same path as params.rlang_sif in conf/containers.config)
+RLANG_SIF=${RLANG_SIF:-/projectnb/wax-es/routines/singularity/chipseq/rlang.sif}
+RSCRIPT="singularity exec -B /projectnb ${RLANG_SIF} Rscript"
 
 echo "Copying xls config to output directory"
 mkdir -p "${output_dir}/summary/" && cp ${xlsconfig} "${output_dir}/summary/"
@@ -18,7 +21,7 @@ NORMAL=$(tput sgr0)
 
 printf ' %s%s%s\n' "$NORMAL" "XLS config file:" "$GREEN" "${xlsconfig}"
 printf ' %s%s%s\n' "$NORMAL" "Directory where raw config files will be located" "$GREEN" "${config_dir}"
-printf ' %s%s%s\n' "$NORMAL" "Dataset label (will be a directory on remote server)" "$GREEN" "${dataset_label}" 
+printf ' %s%s%s\n' "$NORMAL" "Dataset label (will be a directory on remote server)" "$GREEN" "${dataset_label}"
 printf '%s\n' "$NORMAL"
 
 ready=0
@@ -36,30 +39,11 @@ if [[ ${ready} == 0 ]]; then
     exit 0
 fi
 
-# We need to preinstall packages before first run.
-# If "work" directory does not exist we suppose that this is first run
-
-## for new users it is required to create directory for installing packages
-mkdir -p ~/R/x86_64-pc-linux-gnu-library/${RVERSION}
-
-if [ ! -d "work" ]; then
-    # ./install_packages.sh ${RVERSION}
-    # version=${1:-4.4}
-
-    module load R/${RVERSION}
-    export R_LIBS="${HOME}/R/x86_64-pc-linux-gnu-library/${RVERSION}"
-    mkdir -p ${R_LIBS}
-
-    Rscript bin/install_packages.R
-fi
-
-## split xlsx config to individual config files and put to $config_dir 
+## split xlsx config to individual config files and put to $config_dir
 if [ -d "${config_dir}" ]; then
-    module load R/${RVERSION}
-
     rm -rf _tmp && mkdir -p _tmp
     echo "Extracting config files from xls to temporary dir..."
-    Rscript ./bin/config_parser.R --output_dir _tmp --input_xlsx ${xlsconfig}
+    ${RSCRIPT} ./bin/config_parser.R --output_dir _tmp --input_xlsx ${xlsconfig}
     for f in $(find _tmp -name "*" -type f); do
         # echo "Processing file: $f"
         fname=$(basename $f)
@@ -74,12 +58,10 @@ if [ -d "${config_dir}" ]; then
 else
     echo "Extracting config files from xls..."
     mkdir -p ${config_dir}
-    Rscript ./bin/config_parser.R --output_dir ${config_dir} --input_xlsx ${xlsconfig}    
+    ${RSCRIPT} ./bin/config_parser.R --output_dir ${config_dir} --input_xlsx ${xlsconfig}
 fi
 
-module unload R
-
-module load java/21.0.4
-module load nextflow/24.04.4
-
-NXF_OPTS='-Xms500M -Xmx2G' nextflow run main.nf --input_configs ${config_dir} --dataset_label ${dataset_label} --output_dir ${output_dir} --rversion ${RVERSION} -resume 
+## Nextflow runs as a batch job, not on the login node (login nodes kill
+## long-running processes). Progress: tail -f nextflow_head.log
+qsub -N "nf_${dataset_label}" nf_head.qsub "${config_dir}" "${dataset_label}" "${output_dir}"
+echo "Submitted. Follow progress with: tail -f nextflow_head.log  (job status: qstat -u \$USER)"

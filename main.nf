@@ -42,7 +42,6 @@ params.ucsc_db           = g.ucsc_db
 
 log.info "Genome: ${params.genome} | index: ${params.bowtie2_index} | cache: ${params.chipseq_bam_cache}"
 
-params.rversion="4.2"
 params.output_dir="./RESULTS_${params.dataset_label}"
 params.fastq_config = file("$projectDir/${params.input_configs}/fastq_config.csv", checkIfExists: true)
 params.sample_labels_config = file("$projectDir/${params.input_configs}/sample_labels.csv", checkIfExists: true)
