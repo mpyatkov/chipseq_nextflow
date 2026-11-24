@@ -49,7 +49,7 @@ process combine_histograms {
     tag "${group_name}"
 
     executor "local"
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.poppler
     publishDir path: "${params.output_dir}/summary/Histograms/", mode: "copy", pattern: "*combined_histograms.pdf", overwrite: true
     // echo true
 
@@ -62,7 +62,6 @@ process combine_histograms {
     script:
 
     """
-    module load poppler
     sorted_pdfs=(\$(find . -name '*.pdf' | sort))
     pdfunite \${sorted_pdfs[@]} "${group_name}_combined_histograms.pdf"
     """

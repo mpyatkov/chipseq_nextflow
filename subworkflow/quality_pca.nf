@@ -67,7 +67,7 @@ process quality_pca_correlation {
 process combine_pdf {
 
     executor "local"
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.poppler
     publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "Summary*.pdf", overwrite: true
 
     input:
@@ -80,7 +80,6 @@ process combine_pdf {
     script:
 
     """
-    module load poppler
     all_pdfs=(\$(find . -name '*.pdf' | sort))
     pdfunite \${all_pdfs[@]} "Summary_${peakcaller_name}_PCA_correlation_plots.pdf"
 

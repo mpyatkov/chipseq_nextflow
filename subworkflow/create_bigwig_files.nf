@@ -76,7 +76,7 @@ process combine_bigwig_tracks {
     memory '16 GB'
     time '2h'
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.deeptools
     // echo true
 
     input:
@@ -89,8 +89,6 @@ process combine_bigwig_tracks {
     script:
     """
     ## for wiggletools
-    module load miniconda
-    conda activate /projectnb/wax-es/routines/condaenv/deeptools
     bigwigAverage -p $task.cpus -b *.bw -o "${group_name}.bw"
     """
 }

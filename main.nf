@@ -68,7 +68,7 @@ process trim_adapters {
     cpus 8
     memory '8 GB'
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.trimgalore
 
     input:
     tuple val(sample_id), val(library), val(downsample), val(r1), val(r2)
@@ -81,16 +81,12 @@ process trim_adapters {
     lib = library.toString().toLowerCase()
     if ( lib == "paired") {
         """
-        module load trimgalore
-        module load cutadapt
 
         ## remove autodetected adapters
         trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 --paired $r1 $r2 -j 4 --basename ${sample_id}
         """
     } else {
         """
-        module load trimgalore  
-        module load cutadapt
 
         trim_galore --gzip --stringency 13 --trim1 --length 30 --quality 0 $r1 -j 4 --basename ${sample_id}
         # create dummy file for output consistency
@@ -363,10 +359,7 @@ process collect_metrics {
     cpus 1
     memory '16 GB'
 
-    beforeScript """
-    source $HOME/.bashrc
-    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/metrics
-    """
+    container params.containers.picard
     
     storeDir "${params.chipseq_bam_cache}/${sample_id}/metrics/"
     
@@ -379,8 +372,6 @@ process collect_metrics {
     
     script:
     """
-    module load picard
-    module load R/${params.rversion}
 
     # set -x
     
@@ -409,10 +400,7 @@ process fastqc {
     errorStrategy 'retry'
     maxRetries 3
 
-    beforeScript """
-    source $HOME/.bashrc
-    mkdir -p ${params.chipseq_bam_cache}/${sample_id}/fastqc
-    """
+    container params.containers.fastqc
 
     publishDir path: "${params.output_dir}/SAMPLES/${sample_id}/metrics/fastqc/", mode: "symlink", overwrite: params.overwrite_outputs 
 
@@ -430,7 +418,6 @@ process fastqc {
     lib = library.toString().toLowerCase()
 
     """
-    module load fastqc
 
     if [[ "${lib}" == "paired" ]]; then
         
@@ -448,7 +435,7 @@ process fastqc {
     fi
 
     ## calculate number of raw reads
-    NUMREADS=`echo \$(zcat $r1 | wc -l)/4 | bc`
+    NUMREADS=\$(( \$(zcat $r1 | wc -l) / 4 ))
     echo "sample_id,num_raw_reads" >> ${sample_id}_raw_reads.txt
     echo "${sample_id},\${NUMREADS}" >> ${sample_id}_raw_reads.txt
     """
@@ -460,7 +447,7 @@ process multiqc {
     publishDir path: "${params.output_dir}/summary/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: params.overwrite_outputs 
     publishDir path: "/net/waxman-server/mnt/data/waxmanlabvm_home/${workflow.userName}/${params.dataset_label}/multiqc/", mode: "copy", pattern: "multiqc_report.html", overwrite: params.overwrite_outputs 
     
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.multiqc
     
     input:
     path(fastqc)          // fastq
@@ -477,7 +464,6 @@ process multiqc {
 
     script:
     """
-    module load multiqc
     multiqc -f .
     """
 }
@@ -613,7 +599,7 @@ process combine_mn2_dr_pdfs {
     tag "${group_name}"
 
     executor "local"
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.poppler
     publishDir path: "${params.output_dir}/summary/Histograms/", mode: "copy", pattern: "*.pdf", overwrite: true
 
     input:
@@ -626,7 +612,6 @@ process combine_mn2_dr_pdfs {
 
     """
     ls -l
-    module load poppler
     pdfunite $manorm2_pdf $diffreps_pdfs "${group_name}_Histogram_Barcharts_${params.peakcaller}.pdf"
     """
 }

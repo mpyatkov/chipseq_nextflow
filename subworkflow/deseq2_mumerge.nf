@@ -6,7 +6,7 @@ process calc_coverage {
     tag "${meta.group_name}"
     cpus 4
     time '2h'
-    beforeScript 'source $HOME/.bashrc'    
+    container params.containers.subread
         
     input:
     tuple val(meta), path("*"), path(MUMERGE)
@@ -23,7 +23,6 @@ process calc_coverage {
     }
     
     """
-    module load subread
     TRBAM=\$(find . -name "*.bam" | grep -E "${meta.treatment_samples}" | xargs -n1 basename | sort | paste -s -d " ")
     CTRLBAM=\$(find . -name "*.bam" | grep -E "${meta.control_samples}" | xargs -n1 basename | sort | paste -s -d " ")
     awk 'OFS="\t" {print \$1"_"\$2"_"\$3, \$1, \$2+1, \$3, "."}' ${MUMERGE} > mumerge_peaks.saf

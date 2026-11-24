@@ -26,7 +26,7 @@ process combine_noxy {
     tag "${group_name}"
 
     executor "local"
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.poppler
     publishDir path: "${params.output_dir}/summary/Histograms/", mode: "copy", pattern: "*.pdf", overwrite: true
     // echo true
 
@@ -40,7 +40,6 @@ process combine_noxy {
 
     """
     ls -l
-    module load poppler
     pdfunite $diffreps_pdfs "${group_name}_Histogram_noXY_${params.peakcaller}.pdf"
     """
 }
@@ -49,7 +48,7 @@ process combine_allchr {
     tag "${group_name}"
 
     executor "local"
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.poppler
     publishDir path: "${params.output_dir}/summary/Histograms/", mode: "copy", pattern: "*.pdf", overwrite: true
     // echo true
 
@@ -63,7 +62,6 @@ process combine_allchr {
 
     """
     ls -l
-    module load poppler
     pdfunite $diffreps_pdfs "${group_name}_Histogram_AllChrom_${params.peakcaller}.pdf"
     """
 }

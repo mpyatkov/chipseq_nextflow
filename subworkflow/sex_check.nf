@@ -27,7 +27,7 @@ process COUNT_SEX_MARKERS {
     memory '32 GB'
     time '4h'
 
-    beforeScript 'source $HOME/.bashrc'
+    container params.containers.subread
     // echo true
     
     input:
@@ -39,8 +39,6 @@ process COUNT_SEX_MARKERS {
     
     script:
     """
-    module load miniconda
-    conda activate /projectnb/wax-es/routines/condaenv/featureCounts2
     
     featureCounts -F SAF -a $sex_marker_genes -p --countReadPairs -Q 30 -T $task.cpus \
         -o sex_markers.counts *.bam
