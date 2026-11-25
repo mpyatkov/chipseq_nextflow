@@ -89,7 +89,10 @@ binned <- windowCounts(
 keep <- filterWindowsGlobal(data, binned)$filter > log2(5)
 data <- data[keep,]
 
-data <- normFactors(binned, se.out = data)
+## TMM on the filtered windows (signal), not on the 10 kb background bins:
+## corrects for differences in signal-to-noise between samples, the same
+## basis as DESeq2 and RIPPM
+data <- normFactors(data, se.out = TRUE)
 
 y <- asDGEList(data)
 y <- estimateDisp(y, design)
