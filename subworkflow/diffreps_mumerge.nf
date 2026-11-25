@@ -114,32 +114,11 @@ process diffreps_summary {
     """
 }
 
-process collect_diffreps_norm_factors {
-
-    executor 'local'
-    container params.rlang_sif
-    publishDir path: "${params.output_dir}/summary/", mode: "copy", pattern: "*.xlsx", overwrite: true
-    // echo true
-
-    input:
-    tuple path(diffreps_output), path(sample_stats), path(fq_num_reads)
-    output:
-    path("*.xlsx")
-
-    script:
-    """
-    diffreps_output_parser.R --path "." \
-        --rippm_report ${sample_stats} \
-        --fastq_num_reads ${fq_num_reads}
-    """
-}
-
 workflow DIFFREPS {
     take:
     diffreps_config      //parse_configuration_xls.out.diffreps_config
     fragments_bed6       //bam_count.out.fragments_bed6
     norm_factors         //calc_norm_factors.out
-    fq_num_reads         //table with number of reads in R1.fq files for each sample
     mumerge_peaks              //mumerge peaks instead of MACS2 union
     chrom_sizes
 
@@ -170,12 +149,7 @@ workflow DIFFREPS {
 
     prelim_ch | diffreps_summary
 
-    diffreps_summary.out.diffreps_output
-        .collect()
-        .toList()
-        .combine(norm_factors) 
-        .combine(fq_num_reads) | collect_diffreps_norm_factors
-    
     emit:
     full_report = diffreps_summary.out.full_report
+    diffreps_output = diffreps_summary.out.diffreps_output  // raw diffReps reports, for the normalization summary
 }

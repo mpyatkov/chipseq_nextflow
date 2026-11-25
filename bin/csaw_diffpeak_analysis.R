@@ -95,6 +95,17 @@ data <- data[keep,]
 data <- normFactors(data, se.out = TRUE)
 
 y <- asDGEList(data)
+
+## library sizes and factors for the normalization summary (Summary_normalization_factors.xlsx)
+write.table(data.frame(
+  comparison = sub("_MuMerge_CSAW$", "", OUTPUT_PREFIX),
+  sample_id = sub("(_sorted_filtered)?\\.bam$", "", basename(bam.files)),
+  group = toupper(as.character(sample.info$Group)),
+  total_reads = y$samples$lib.size,
+  norm_factor = y$samples$norm.factors,
+  effective_lib_size = round(y$samples$lib.size * y$samples$norm.factors)),
+  paste0(OUTPUT_PREFIX, "_norm_factors.tsv"), sep = "\t", quote = FALSE, row.names = FALSE)
+
 y <- estimateDisp(y, design)
 
 fit <- glmQLFit(y, design, robust = TRUE)

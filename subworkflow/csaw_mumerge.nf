@@ -16,7 +16,8 @@ process calc_csaw {
     tuple val(meta), path("*"), path(MUMERGE)
 
     output:
-    tuple val(meta), path("*.xlsx")
+    tuple val(meta), path("*.xlsx"), emit: full_report
+    tuple val(meta), path("*_norm_factors.tsv"), emit: norm_factors
 
     script:
     output_prefix="${meta.group_name}_MuMerge_CSAW"
@@ -61,5 +62,6 @@ workflow CSAW_MUMERGE {
     calc_csaw(input_params)
     
     emit:
-    full_report = calc_csaw.out
+    full_report = calc_csaw.out.full_report
+    norm_factors = calc_csaw.out.norm_factors
 }

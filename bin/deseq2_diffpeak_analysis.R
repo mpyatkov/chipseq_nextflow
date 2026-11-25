@@ -81,6 +81,16 @@ dds <- dds[keep, ]
 dds <- DESeq(dds)
 deseq2_results <- results(dds, contrast = c("condition", "Treatment", "Control"))
 
+## size factors for the normalization summary (Summary_normalization_factors.xlsx)
+size_factors <- sizeFactors(dds)
+write.table(data.frame(
+  comparison = sub("_MuMerge_DESEQ2$", "", OUTPUT_PREFIX),
+  sample_id = sub("(_sorted_filtered)?\\.bam$", "", names(size_factors)),
+  group = ifelse(names(size_factors) %in% treatment_samples, "TREATMENT", "CONTROL"),
+  reads_in_peaks = colSums(count_matrix)[names(size_factors)],
+  size_factor = unname(size_factors)),
+  paste0(OUTPUT_PREFIX, "_norm_factors.tsv"), sep = "\t", quote = FALSE, row.names = FALSE)
+
 # Extract results with desired columns
 deseq2_output <- data.frame(
   Geneid = rownames(deseq2_results),

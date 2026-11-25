@@ -44,7 +44,8 @@ process calc_deseq2 {
     tuple val(meta), path(coverage)
 
     output:
-    tuple val(meta), path("*.xlsx")
+    tuple val(meta), path("*.xlsx"), emit: full_report
+    tuple val(meta), path("*_norm_factors.tsv"), emit: norm_factors
 
     script:
     output_prefix="${meta.group_name}_MuMerge_DESEQ2"
@@ -86,5 +87,6 @@ workflow DESEQ2_MUMERGE {
     calc_coverage(input_params) | calc_deseq2
     
     emit:
-    full_report = calc_deseq2.out
+    full_report = calc_deseq2.out.full_report
+    norm_factors = calc_deseq2.out.norm_factors
 }
