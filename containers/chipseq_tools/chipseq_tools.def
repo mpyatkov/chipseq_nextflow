@@ -43,6 +43,11 @@ From: mambaorg/micromamba:2.3.3
     diffreps --version
     samtools --version | head -1
     macs2 --version
+    # run (not only find) the Python tools: imports fail at runtime, not at install
+    epic2 --version
+    bowtie2 --version | head -1
+    sambamba --version 2>&1 | head -2 | tail -1
+    bedtools --version
 
 %labels
     Author waxmanlab
