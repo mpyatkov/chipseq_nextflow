@@ -202,6 +202,9 @@ process bam_count {
     tuple val(sample_id), path("*stats"), emit: stats
 
     script:
+    // Create the storeDir folder here, on the Nextflow node: if the task creates it,
+    // this node may not see it yet when checking the outputs ("Missing output file").
+    file("${params.chipseq_bam_cache}/${sample_id}/bam_count").mkdirs()
     bedtools_bedpe = lib == "paired" ? "-bedpe" : ""
 
     """
@@ -269,6 +272,9 @@ process macs2_callpeak {
 
 
     shell:
+    // Create the storeDir folder here, on the Nextflow node: if the task creates it,
+    // this node may not see it yet when checking the outputs ("Missing output file").
+    file("${params.chipseq_bam_cache}/${sample_id}/macs2").mkdirs()
     lib=library == "paired" ? "BAMPE" : "BAM"
     model=params.macs2_model ? "" : "--nomodel"
     template 'macs2_callpeak.sh'
@@ -313,6 +319,9 @@ process epic2_callpeak {
     tuple val(sample_id), path("*epic2*.bb"), emit: epic2_bb
 
     script:
+    // Create the storeDir folder here, on the Nextflow node: if the task creates it,
+    // this node may not see it yet when checking the outputs ("Missing output file").
+    file("${params.chipseq_bam_cache}/${sample_id}/epic2").mkdirs()
     window_size=400
     fragment_size=200
     effective_genome_fraction=0.80
@@ -370,6 +379,9 @@ process collect_metrics {
     tuple val(sample_id), path("*.pdf"), emit: metrics_pdf
     
     script:
+    // Create the storeDir folder here, on the Nextflow node: if the task creates it,
+    // this node may not see it yet when checking the outputs ("Missing output file").
+    file("${params.chipseq_bam_cache}/${sample_id}/metrics").mkdirs()
     """
 
     # set -x
@@ -414,6 +426,9 @@ process fastqc {
     tuple val(sample_id), path("*_raw_reads.txt") , emit: raw_reads
     
     script:
+    // Create the storeDir folder here, on the Nextflow node: if the task creates it,
+    // this node may not see it yet when checking the outputs ("Missing output file").
+    file("${params.chipseq_bam_cache}/${sample_id}/fastqc").mkdirs()
     lib = library.toString().toLowerCase()
 
     """

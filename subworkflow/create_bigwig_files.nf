@@ -58,6 +58,9 @@ process create_bigwig_files {
     tuple val(sample_id), path("*.bw")
     
     script:
+    // Create the storeDir folder here, on the Nextflow node: if the task creates it,
+    // this node may not see it yet when checking the outputs ("Missing output file").
+    file("${params.chipseq_bam_cache}/${sample_id}/bigwig").mkdirs()
     """
 
     bedtools sort -i ${fragments} > tmp.sorted.bed
